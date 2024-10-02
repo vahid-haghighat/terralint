@@ -200,7 +200,7 @@ Token:
 		Value:    []hclwrite.Tokens{bodyBuffer},
 		Comments: commentBuffer,
 	}
-	if lastSection.HasValue() {
+	if lastSection.IsEmpty() {
 		rawSections = append(rawSections, lastSection)
 	}
 	return rawSections, nil

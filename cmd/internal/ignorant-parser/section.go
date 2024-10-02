@@ -94,7 +94,12 @@ func (s *Section) HasValue() bool {
 			return true
 		}
 	}
-	return s.Type != "" || len(s.Labels) > 0 || len(s.Comments) > 0
+	return false
+}
+
+func (s *Section) IsEmpty() bool {
+	hasValue := s.HasValue()
+	return hasValue || s.Type != "" || len(s.Labels) > 0 || len(s.Comments) > 0
 }
 
 func (s *Section) IsAttribute() bool {
@@ -110,13 +115,13 @@ func (s *Section) IsList() bool {
 }
 
 func (s *Section) Tokens() hclwrite.Tokens {
-	if !s.HasValue() {
+	if !s.IsEmpty() {
 		return nil
 	}
 
 	file := hclwrite.NewEmptyFile()
 	file.Body().AppendUnstructuredTokens(s.Comments)
-	if s.Value == nil {
+	if !s.HasValue() {
 		return file.BuildTokens(nil)
 	}
 	var tokens hclwrite.Tokens

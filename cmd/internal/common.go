@@ -253,7 +253,7 @@ func getInternalSections(sections []*ignorantparser.Section, parentRules []rule)
 	inSection := false
 
 	for index < len(sections) {
-		if !sections[index].HasValue() {
+		if !sections[index].IsEmpty() {
 			index++
 			continue
 		}
@@ -273,7 +273,7 @@ func getInternalSections(sections []*ignorantparser.Section, parentRules []rule)
 					Comments: sections[index].Comments[:endingBrace],
 				}
 
-				if endingComments.HasValue() {
+				if endingComments.IsEmpty() {
 					groups[len(groups)-1].Sections = append(groups[len(groups)-1].Sections, &Section{
 						Section: endingComments,
 						Rules:   rules,
@@ -383,7 +383,7 @@ func mergeLocals(input []*ignorantparser.Section) []*ignorantparser.Section {
 func getToken(sections []*ignorantparser.Section) hclwrite.Tokens {
 	file := hclwrite.NewEmptyFile()
 	for index, section := range sections {
-		if !section.HasValue() {
+		if !section.IsEmpty() {
 			continue
 		}
 		file.Body().AppendUnstructuredTokens(section.Tokens())
@@ -412,7 +412,7 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 
 		for subIndex := range internalSections[index].Sections {
 			subsection := internalSections[index].Sections[subIndex]
-			if !subsection.Section.HasValue() {
+			if !subsection.Section.IsEmpty() {
 				continue
 			}
 
