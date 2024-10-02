@@ -12,10 +12,21 @@ import (
 	"terralint/cmd/utilities"
 )
 
+type PrioritySetting struct {
+	Names             []string
+	NewLineCountAfter int
+}
+
+type LocationSettings struct {
+	InnerIndex        int
+	OuterIndex        int
+	NewLineCountAfter int
+}
+
 type PriorityLists struct {
-	PrependedAttributes [][]string
-	AppendedAttributes  [][]string
-	PrependedBlocks     [][]string
+	PrependedAttributes []PrioritySetting
+	AppendedAttributes  []PrioritySetting
+	PrependedBlocks     []PrioritySetting
 }
 
 type internalSection struct {
@@ -47,12 +58,12 @@ type Section struct {
 }
 
 var defaultPriorities = PriorityLists{
-	PrependedAttributes: [][]string{
-		{"count"},
-		{"for_each"},
-		{"source", "version"},
-		{"provider"},
-		{"providers"},
+	PrependedAttributes: []PrioritySetting{
+		{[]string{"count"}, 1},
+		{[]string{"for_each"}, 1},
+		{[]string{"source", "version"}, 1},
+		{[]string{"provider"}, 1},
+		{[]string{"providers"}, 1},
 	},
 	// This order puts anything with lower index number, closer to the end
 	// of the block. For example, the following order means a block like this after apply:
@@ -64,14 +75,14 @@ var defaultPriorities = PriorityLists{
 	//    tags = {}
 	//	  depends_on = []
 	//	}
-	AppendedAttributes: [][]string{
-		{"depends_on"},
-		{"tags"},
-		{"lifecycle"},
+	AppendedAttributes: []PrioritySetting{
+		{[]string{"depends_on"}, 1},
+		{[]string{"tags"}, 1},
+		{[]string{"lifecycle"}, 1},
 	},
-	PrependedBlocks: [][]string{
-		{"terraform"},
-		{"locals"},
+	PrependedBlocks: []PrioritySetting{
+		{[]string{"terraform"}, 1},
+		{[]string{"locals"}, 1},
 	},
 }
 
@@ -79,16 +90,16 @@ var priorities = map[string]*PriorityLists{
 	"root":   &defaultPriorities,
 	"module": &defaultPriorities,
 	"resource": {
-		PrependedAttributes: [][]string{
-			{"count"},
-			{"for_each"},
-			{"provider"},
+		PrependedAttributes: []PrioritySetting{
+			{[]string{"count"}, 1},
+			{[]string{"for_each"}, 1},
+			{[]string{"provider"}, 1},
 		},
 		AppendedAttributes: defaultPriorities.AppendedAttributes,
 		PrependedBlocks:    nil,
 	},
 	"variable": {
-		PrependedAttributes: [][]string{{"type"}},
+		PrependedAttributes: []PrioritySetting{{[]string{"type"}, 0}},
 	},
 	"output":    {},
 	"data":      {},
@@ -511,18 +522,27 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 
 				isPreviousBlock := false
 				innerSectionsIndex := 0
-				previousOuterIndex := math.MaxInt
+				previousLocation := &LocationSettings{
+					InnerIndex:        math.MaxInt,
+					OuterIndex:        math.MaxInt,
+					NewLineCountAfter: 0,
+				}
 				for innerSectionsIndex < len(innerSections) {
-					currentOuterIndex, _ := getLocation(innerSections[innerSectionsIndex].Type, getPriorities(subsection.Section.Type).PrependedAttributes)
-					isPreviousPrependedAttribute := previousOuterIndex != math.MaxInt && currentOuterIndex == math.MaxInt
+					currentLocation := getLocation(innerSections[innerSectionsIndex].Type, getPriorities(subsection.Section.Type).PrependedAttributes)
+					isPreviousPrependedAttribute := previousLocation.OuterIndex != math.MaxInt && previousLocation.NewLineCountAfter != 0 && currentLocation.OuterIndex == math.MaxInt
 
 					isCurrentBlock := innerSections[innerSectionsIndex].LineCounts() > 1
 					if (isCurrentBlock || isPreviousBlock || isPreviousPrependedAttribute) && innerSectionsIndex > 0 {
 						tokens = append(tokens, &tokenNewLine)
+						if previousLocation.NewLineCountAfter > 1 {
+							for i := 0; i < previousLocation.NewLineCountAfter-1; i++ {
+								tokens = append(tokens, &tokenNewLine)
+							}
+						}
 					}
 					tokens = append(tokens, innerSections[innerSectionsIndex].Tokens()...)
 
-					previousOuterIndex = currentOuterIndex
+					previousLocation = currentLocation
 
 					isPreviousBlock = isCurrentBlock
 					if isPreviousBlock && innerSectionsIndex < len(innerSections)-1 && innerSections[innerSectionsIndex+1].Type == sectionEndType {
@@ -585,43 +605,51 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 	return result, nil
 }
 
-func getLocation(name string, array [][]string) (int, int) {
-	for outer, items := range array {
-		for inner, item := range items {
+func getLocation(name string, array []PrioritySetting) *LocationSettings {
+	for outer, settings := range array {
+		for inner, item := range settings.Names {
 			if name == item {
-				return outer, inner
+				return &LocationSettings{
+					InnerIndex:        inner,
+					OuterIndex:        outer,
+					NewLineCountAfter: settings.NewLineCountAfter,
+				}
 			}
 		}
 	}
-	return math.MaxInt, math.MaxInt
+	return &LocationSettings{
+		InnerIndex:        math.MaxInt,
+		OuterIndex:        math.MaxInt,
+		NewLineCountAfter: 0,
+	}
 }
 
 func sortLogic(sections []*Section, first, second int, priorities *PriorityLists) bool {
-	firstPrependedLocationOuter, firstPrependedLocationInner := getLocation(sections[first].Section.Type, priorities.PrependedBlocks)
-	secondPrependedLocationOuter, secondPrependedLocationInner := getLocation(sections[second].Section.Type, priorities.PrependedBlocks)
+	firstPrependedLocation := getLocation(sections[first].Section.Type, priorities.PrependedBlocks)
+	secondPrependedLocation := getLocation(sections[second].Section.Type, priorities.PrependedBlocks)
 
-	if firstPrependedLocationOuter != secondPrependedLocationOuter {
-		return firstPrependedLocationOuter < secondPrependedLocationOuter
-	} else if firstPrependedLocationOuter == secondPrependedLocationOuter && firstPrependedLocationOuter != math.MaxInt {
-		return firstPrependedLocationInner < secondPrependedLocationInner
+	if firstPrependedLocation.OuterIndex != secondPrependedLocation.OuterIndex {
+		return firstPrependedLocation.OuterIndex < secondPrependedLocation.OuterIndex
+	} else if firstPrependedLocation.OuterIndex == secondPrependedLocation.OuterIndex && firstPrependedLocation.OuterIndex != math.MaxInt {
+		return firstPrependedLocation.InnerIndex < secondPrependedLocation.InnerIndex
 	}
 
-	firstPrependedLocationOuter, firstPrependedLocationInner = getLocation(sections[first].Section.Type, priorities.PrependedAttributes)
-	secondPrependedLocationOuter, secondPrependedLocationInner = getLocation(sections[second].Section.Type, priorities.PrependedAttributes)
+	firstPrependedLocation = getLocation(sections[first].Section.Type, priorities.PrependedAttributes)
+	secondPrependedLocation = getLocation(sections[second].Section.Type, priorities.PrependedAttributes)
 
-	if firstPrependedLocationOuter != secondPrependedLocationOuter {
-		return firstPrependedLocationOuter < secondPrependedLocationOuter
-	} else if firstPrependedLocationOuter == secondPrependedLocationOuter && firstPrependedLocationOuter != math.MaxInt {
-		return firstPrependedLocationInner < secondPrependedLocationInner
+	if firstPrependedLocation.OuterIndex != secondPrependedLocation.OuterIndex {
+		return firstPrependedLocation.OuterIndex < secondPrependedLocation.OuterIndex
+	} else if firstPrependedLocation.OuterIndex == secondPrependedLocation.OuterIndex && firstPrependedLocation.OuterIndex != math.MaxInt {
+		return firstPrependedLocation.InnerIndex < secondPrependedLocation.InnerIndex
 	}
 
-	firstAppendedLocationOuter, firstAppendedLocationInner := getLocation(sections[first].Section.Type, priorities.AppendedAttributes)
-	secondAppendedLocationOuter, secondAppendedLocationInner := getLocation(sections[second].Section.Type, priorities.AppendedAttributes)
+	firstAppendedLocation := getLocation(sections[first].Section.Type, priorities.AppendedAttributes)
+	secondAppendedLocation := getLocation(sections[second].Section.Type, priorities.AppendedAttributes)
 
-	if firstAppendedLocationOuter != secondAppendedLocationOuter {
-		return firstAppendedLocationOuter > secondAppendedLocationOuter
-	} else if firstAppendedLocationOuter == secondAppendedLocationOuter && firstAppendedLocationOuter != math.MaxInt {
-		return firstAppendedLocationInner > secondAppendedLocationInner
+	if firstAppendedLocation.OuterIndex != secondAppendedLocation.OuterIndex {
+		return firstAppendedLocation.OuterIndex > secondAppendedLocation.OuterIndex
+	} else if firstAppendedLocation.OuterIndex == secondAppendedLocation.OuterIndex && firstAppendedLocation.OuterIndex != math.MaxInt {
+		return firstAppendedLocation.InnerIndex > secondAppendedLocation.InnerIndex
 	}
 
 	if sections[first].Section.IsAttribute() != sections[second].Section.IsAttribute() {
