@@ -336,12 +336,15 @@ func mergeLocals(input []*ignorantparser.Section) []*ignorantparser.Section {
 	locals := &ignorantparser.Section{
 		Type:     "locals",
 		Labels:   nil,
-		Value:    []hclwrite.Tokens{{}},
+		Value:    nil,
 		Comments: nil,
 	}
 
 	for _, section := range input {
 		if section.Type == "locals" {
+			if len(locals.Value) == 0 {
+				locals.Value = append(locals.Value, hclwrite.Tokens{})
+			}
 			locals.Value[0] = append(locals.Value[0], ignorantparser.GetSectionBody(section.FlattenValue())...)
 			locals.Comments = append(locals.Comments, section.Comments...)
 		} else {

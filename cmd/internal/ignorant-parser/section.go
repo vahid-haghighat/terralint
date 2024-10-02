@@ -207,7 +207,7 @@ func trimEndNewLines(tokens hclwrite.Tokens) hclwrite.Tokens {
 	}
 
 	index := len(tokens) - 1
-	for tokenIsNewline(tokens[index]) && index >= 0 {
+	for index >= 0 && tokenIsNewline(tokens[index]) {
 		index--
 	}
 
