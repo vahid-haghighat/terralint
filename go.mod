@@ -1,4 +1,4 @@
-module terralint
+module github.com/vahid-haghighat/terralint
 
 go 1.23
 

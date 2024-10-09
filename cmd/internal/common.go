@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	ignorantparser "github.com/vahid-haghighat/terralint/cmd/internal/ignorant-parser"
+	"github.com/vahid-haghighat/terralint/cmd/utilities"
 	"math"
 	"regexp"
 	"sort"
 	"strings"
-	ignorantparser "terralint/cmd/internal/ignorant-parser"
-	"terralint/cmd/utilities"
 )
 
 type PrioritySetting struct {

@@ -1,6 +1,6 @@
 package main
 
-import "terralint/cmd"
+import "github.com/vahid-haghighat/terralint/cmd"
 
 func main() {
 	cmd.Execute()
