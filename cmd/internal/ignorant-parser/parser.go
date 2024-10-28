@@ -162,6 +162,12 @@ Token:
 				var lastToken hclsyntax.TokenType
 				for lastToken != hclsyntax.TokenCBrack {
 					s := p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack, hclsyntax.TokenComma})
+					for _, t := range s {
+						if t.Type == hclsyntax.TokenIdent && string(t.Bytes) == "for" {
+							s = append(s, p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack})...)
+							break
+						}
+					}
 					lastToken = s[len(s)-1].Type
 					start := 0
 					for start < len(s) && s[start].Type == hclsyntax.TokenNewline {
