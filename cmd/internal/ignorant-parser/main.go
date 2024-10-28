@@ -41,7 +41,6 @@ func ParseConfigFromFile(filePath string) ([]*Section, error) {
 
 // ParseSectionConfig This method assumes the correctness of the syntax. Use with care
 func ParseSectionConfig(tokens hclwrite.Tokens) ([]*Section, error) {
-
 	tokens = GetSectionBody(tokens)
 	if tokens == nil || len(tokens) == 0 {
 		return nil, nil

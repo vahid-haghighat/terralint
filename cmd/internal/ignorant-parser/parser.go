@@ -173,7 +173,7 @@ Token:
 						end--
 					}
 
-					if start < end {
+					if start <= end {
 						section.Value = append(section.Value, s[start:end+1])
 					}
 				}
