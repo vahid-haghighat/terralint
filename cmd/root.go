@@ -21,7 +21,7 @@ var rootCmd = &cobra.Command{
 	Long:  `Checks and lint terraform files based on an opinionated style guide.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if versionFlag {
-			fmt.Printf("v%s\n", version.Version)
+			fmt.Println(version.Version)
 			return nil
 		}
 
