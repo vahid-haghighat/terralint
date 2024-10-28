@@ -101,8 +101,14 @@ var priorities = map[string]*PriorityLists{
 	"variable": {
 		PrependedAttributes: []PrioritySetting{{[]string{"type"}, 0}},
 	},
-	"output":    {},
-	"data":      {},
+	"output": {},
+	"data": {
+		PrependedAttributes: []PrioritySetting{
+			{[]string{"count"}, 1},
+			{[]string{"for_each"}, 1},
+			{[]string{"provider"}, 1},
+		},
+	},
 	"terraform": {},
 	"locals":    {},
 	"":          {},
