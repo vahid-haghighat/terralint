@@ -8,6 +8,7 @@ import (
 	"github.com/vahid-haghighat/terralint/cmd/utilities"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -437,70 +438,93 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 
 			var tokens hclwrite.Tokens
 			if subsection.Section.IsList() {
-				sub := subsection.Section.Value[1 : len(subsection.Section.Value)-1]
-
-				var ts []hclwrite.Tokens
-				for _, v := range sub {
-					var tsItem hclwrite.Tokens
-					innerSections, err := ignorantparser.ParseSectionConfig(v)
-					if err != nil {
-						return nil, err
-					}
-
-					innerSections, err = applyRules(innerSections, subsection.Section.Type, internalSections[index].Rules)
-					if len(innerSections) == 0 {
-						ts = append(ts, hclwrite.Tokens{
-							&tokenOBrace,
-							&tokenCBrace,
-						})
-						continue
-					}
-
-					obj := innerSections[0].Type != ""
-					if obj {
-						tsItem = hclwrite.Tokens{
-							&tokenOBrace,
-							&tokenNewLine,
-						}
-					}
-					for _, si := range innerSections {
-						end := len(si.Value[0]) - 1
-						if obj {
-							tsItem = append(tsItem, hclwrite.TokensForIdentifier(si.Type)...)
-							end++
-						}
-						tsItem = append(tsItem, si.Value[0][:end]...)
-					}
-
-					if obj {
-						tsItem = append(tsItem, &tokenCBrace)
-					}
-					ts = append(ts, tsItem)
-				}
-				var r hclwrite.Tokens
-				for _, t := range ts {
-					r = append(r, t...)
-				}
-
-				tokens = hclwrite.Tokens{&tokenEqual}
-				if subsection.Section.ListCount() <= 1 {
-					closing := tokenCBrack
-					closing.SpacesBefore = 1
-					tokens = append(tokens, &tokenOBrack)
-					if subsection.Section.ListCount() == 1 {
-						tokens = append(tokens, ts[0]...)
-					}
-					tokens = append(tokens, &closing, &tokenNewLine)
-				} else {
-					tokens = append(tokens, hclwrite.Tokens{
+				// If it is a for loop
+				if subsection.Section.ListCount() < 0 {
+					tokens = hclwrite.Tokens{
+						&tokenEqual,
 						&tokenOBrack,
 						&tokenNewLine,
-					}...)
-					for _, val := range ts {
-						tokens = append(tokens, val...)
-						tokens = append(tokens, &tokenComma, &tokenNewLine)
 					}
-					tokens = append(tokens, &tokenCBrack)
+
+					start := 0
+					for start < len(subsection.Section.Value[0]) && slices.Contains([]hclsyntax.TokenType{hclsyntax.TokenNewline, hclsyntax.TokenEqual, hclsyntax.TokenOBrack}, subsection.Section.Value[0][start].Type) {
+						start++
+					}
+
+					end := len(subsection.Section.Value[0]) - 1
+					for end >= 0 && slices.Contains([]hclsyntax.TokenType{hclsyntax.TokenNewline, hclsyntax.TokenCBrack}, subsection.Section.Value[0][end].Type) {
+						end--
+					}
+
+					val := subsection.Section.Value[0][start : end+1]
+					tokens = append(tokens, val...)
+					tokens = append(tokens, &tokenNewLine, &tokenCBrack)
+				} else {
+					sub := subsection.Section.Value[1 : len(subsection.Section.Value)-1]
+
+					var ts []hclwrite.Tokens
+					for _, v := range sub {
+						var tsItem hclwrite.Tokens
+						innerSections, err := ignorantparser.ParseSectionConfig(v)
+						if err != nil {
+							return nil, err
+						}
+
+						innerSections, err = applyRules(innerSections, subsection.Section.Type, internalSections[index].Rules)
+						if len(innerSections) == 0 {
+							ts = append(ts, hclwrite.Tokens{
+								&tokenOBrace,
+								&tokenCBrace,
+							})
+							continue
+						}
+
+						obj := innerSections[0].Type != ""
+						if obj {
+							tsItem = hclwrite.Tokens{
+								&tokenOBrace,
+								&tokenNewLine,
+							}
+						}
+						for _, si := range innerSections {
+							end := len(si.Value[0]) - 1
+							if obj {
+								tsItem = append(tsItem, hclwrite.TokensForIdentifier(si.Type)...)
+								end++
+							}
+							tsItem = append(tsItem, si.Value[0][:end]...)
+						}
+
+						if obj {
+							tsItem = append(tsItem, &tokenCBrace)
+						}
+						ts = append(ts, tsItem)
+					}
+					var r hclwrite.Tokens
+					for _, t := range ts {
+						r = append(r, t...)
+					}
+
+					tokens = hclwrite.Tokens{&tokenEqual}
+					if subsection.Section.ListCount() <= 1 {
+						closing := tokenCBrack
+						closing.SpacesBefore = 1
+						tokens = append(tokens, &tokenOBrack)
+						if subsection.Section.ListCount() == 1 {
+							tokens = append(tokens, ts[0]...)
+						}
+						tokens = append(tokens, &closing, &tokenNewLine)
+					} else {
+						tokens = append(tokens, hclwrite.Tokens{
+							&tokenOBrack,
+							&tokenNewLine,
+						}...)
+						for _, val := range ts {
+							tokens = append(tokens, val...)
+							tokens = append(tokens, &tokenComma, &tokenNewLine)
+						}
+						tokens = append(tokens, &tokenCBrack)
+					}
 				}
 			} else {
 				innerSections, err := ignorantparser.ParseSectionConfig(subsection.Section.Value[0])

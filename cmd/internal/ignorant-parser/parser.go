@@ -159,31 +159,29 @@ Token:
 			if p.Peek().Type == hclsyntax.TokenOBrack {
 				p.Read()
 				section.Value[0] = append(section.Value[0], &tokenOBrack)
-				var lastToken hclsyntax.TokenType
-				for lastToken != hclsyntax.TokenCBrack {
-					s := p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack, hclsyntax.TokenComma})
-					for _, t := range s {
-						if t.Type == hclsyntax.TokenIdent && string(t.Bytes) == "for" {
-							s = append(s, p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack})...)
-							break
+				if string(p.Peek().Bytes) == "for" {
+					section.Value[0] = append(section.Value[0], p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack})...)
+				} else {
+					var lastToken hclsyntax.TokenType
+					for lastToken != hclsyntax.TokenCBrack {
+						s := p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack, hclsyntax.TokenComma})
+						lastToken = s[len(s)-1].Type
+						start := 0
+						for start < len(s) && s[start].Type == hclsyntax.TokenNewline {
+							start++
+						}
+
+						end := len(s) - 2
+						for end >= 0 && s[end].Type == hclsyntax.TokenNewline {
+							end--
+						}
+
+						if start <= end {
+							section.Value = append(section.Value, s[start:end+1])
 						}
 					}
-					lastToken = s[len(s)-1].Type
-					start := 0
-					for start < len(s) && s[start].Type == hclsyntax.TokenNewline {
-						start++
-					}
-
-					end := len(s) - 2
-					for end >= 0 && s[end].Type == hclsyntax.TokenNewline {
-						end--
-					}
-
-					if start <= end {
-						section.Value = append(section.Value, s[start:end+1])
-					}
+					section.Value = append(section.Value, hclwrite.Tokens{&tokenCBrack})
 				}
-				section.Value = append(section.Value, hclwrite.Tokens{&tokenCBrack})
 			} else {
 				section.Value[0] = append(section.Value[0], p.ReadTokensUntil(newLineTokens)...)
 			}
