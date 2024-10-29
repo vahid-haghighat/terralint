@@ -22,6 +22,7 @@ var openingTokens = []hclsyntax.TokenType{
 var newLineTokens = []hclsyntax.TokenType{
 	hclsyntax.TokenNewline,
 	hclsyntax.TokenComment,
+	hclsyntax.TokenComma,
 }
 
 func oppositeBracket(ty hclsyntax.TokenType) hclsyntax.TokenType {
@@ -183,7 +184,11 @@ Token:
 					section.Value = append(section.Value, hclwrite.Tokens{&tokenCBrack})
 				}
 			} else {
-				section.Value[0] = append(section.Value[0], p.ReadTokensUntil(newLineTokens)...)
+				ts := p.ReadTokensUntil(newLineTokens)
+				if ts[len(ts)-1].Type == hclsyntax.TokenComma {
+					ts = ts[:len(ts)-1]
+				}
+				section.Value[0] = append(section.Value[0], ts...)
 			}
 
 			rawSections = append(rawSections, section)

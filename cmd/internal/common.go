@@ -493,6 +493,9 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 								end++
 							}
 							tsItem = append(tsItem, si.Value[0][:end]...)
+							if tsItem[len(tsItem)-1].Type != hclsyntax.TokenNewline {
+								tsItem = append(tsItem, &tokenNewLine)
+							}
 						}
 
 						if obj {
