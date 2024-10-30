@@ -20,9 +20,10 @@ type PrioritySetting struct {
 }
 
 type LocationSettings struct {
-	InnerIndex        int
-	OuterIndex        int
-	NewLineCountAfter int
+	InnerIndex         int
+	OuterIndex         int
+	NewLineCountAfter  int
+	NewlineCountBefore int
 }
 
 type PriorityLists struct {
@@ -554,27 +555,31 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 
 				isPreviousBlock := false
 				innerSectionsIndex := 0
-				previousLocation := &LocationSettings{
+				previousPrependedLocation := &LocationSettings{
 					InnerIndex:        math.MaxInt,
 					OuterIndex:        math.MaxInt,
 					NewLineCountAfter: 0,
 				}
 				for innerSectionsIndex < len(innerSections) {
-					currentLocation := getLocation(innerSections[innerSectionsIndex].Type, getPriorities(subsection.Section.Type).PrependedAttributes)
-					isPreviousPrependedAttribute := previousLocation.OuterIndex != math.MaxInt && previousLocation.NewLineCountAfter != 0 && currentLocation.OuterIndex == math.MaxInt
+					currentPrependedLocation := getLocation(innerSections[innerSectionsIndex].Type, getPriorities(subsection.Section.Type).PrependedAttributes)
+					isPreviousPrependedAttribute := previousPrependedLocation.OuterIndex != math.MaxInt && previousPrependedLocation.NewLineCountAfter != 0 && currentPrependedLocation.OuterIndex == math.MaxInt
+
+					currentAppendedAttribute := getLocation(innerSections[innerSectionsIndex].Type, getPriorities(subsection.Section.Type).AppendedAttributes)
+					isCurrentAppendedAttribute := currentAppendedAttribute.OuterIndex != math.MaxInt && currentAppendedAttribute.NewlineCountBefore != 0 && previousPrependedLocation.OuterIndex == math.MaxInt
 
 					isCurrentBlock := innerSections[innerSectionsIndex].LineCounts() > 1
-					if (isCurrentBlock || isPreviousBlock || isPreviousPrependedAttribute) && innerSectionsIndex > 0 {
+					if (isCurrentBlock || isPreviousBlock || isPreviousPrependedAttribute || isCurrentAppendedAttribute) && innerSectionsIndex > 0 {
 						tokens = append(tokens, &tokenNewLine)
-						if previousLocation.NewLineCountAfter > 1 {
-							for i := 0; i < previousLocation.NewLineCountAfter-1; i++ {
+						linesToAdd := previousPrependedLocation.NewLineCountAfter + currentAppendedAttribute.NewlineCountBefore - 1
+						if linesToAdd >= 1 {
+							for i := 0; i < linesToAdd; i++ {
 								tokens = append(tokens, &tokenNewLine)
 							}
 						}
 					}
 					tokens = append(tokens, innerSections[innerSectionsIndex].Tokens()...)
 
-					previousLocation = currentLocation
+					previousPrependedLocation = currentPrependedLocation
 
 					isPreviousBlock = isCurrentBlock
 					if isPreviousBlock && innerSectionsIndex < len(innerSections)-1 && innerSections[innerSectionsIndex+1].Type == sectionEndType {
@@ -642,17 +647,19 @@ func getLocation(name string, array []PrioritySetting) *LocationSettings {
 		for inner, item := range settings.Names {
 			if name == item {
 				return &LocationSettings{
-					InnerIndex:        inner,
-					OuterIndex:        outer,
-					NewLineCountAfter: settings.NewLineCountAfter,
+					InnerIndex:         inner,
+					OuterIndex:         outer,
+					NewLineCountAfter:  settings.NewLineCountAfter,
+					NewlineCountBefore: settings.NewlineCountBefore,
 				}
 			}
 		}
 	}
 	return &LocationSettings{
-		InnerIndex:        math.MaxInt,
-		OuterIndex:        math.MaxInt,
-		NewLineCountAfter: 0,
+		InnerIndex:         math.MaxInt,
+		OuterIndex:         math.MaxInt,
+		NewLineCountAfter:  0,
+		NewlineCountBefore: 0,
 	}
 }
 
