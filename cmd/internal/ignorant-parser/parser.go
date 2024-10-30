@@ -112,6 +112,10 @@ Token:
 	return buffer
 }
 
+func (p *parser) ReadForExpression() hclwrite.Tokens {
+	return nil
+}
+
 func (p *parser) ParseBody() ([]*Section, error) {
 	var rawSections []*Section
 	var commentBuffer hclwrite.Tokens
@@ -155,14 +159,19 @@ Token:
 
 			if next.Type == hclsyntax.TokenEqual {
 				section.Value[0] = append(section.Value[0], p.Read())
+				if p.Peek().Type == hclsyntax.TokenOBrace {
+					section.expressionType = blockAttributeExpression
+				}
 			}
 
 			if p.Peek().Type == hclsyntax.TokenOBrack {
 				p.Read()
 				section.Value[0] = append(section.Value[0], &tokenOBrack)
-				if string(p.Peek().Bytes) == "for" {
+				if p.LookAheadFor(hclwrite.Tokens{&tokenFor}) {
+					section.expressionType = listForExpression
 					section.Value[0] = append(section.Value[0], p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack})...)
 				} else {
+					section.expressionType = listExpression
 					var lastToken hclsyntax.TokenType
 					for lastToken != hclsyntax.TokenCBrack {
 						s := p.ReadTokensUntil([]hclsyntax.TokenType{hclsyntax.TokenCBrack, hclsyntax.TokenComma})

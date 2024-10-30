@@ -432,7 +432,7 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 				subsection.Section = r.Apply(subsection.Section)
 			}
 
-			if subsection.Section.LineCounts() == 1 || (!subsection.Section.IsBlock() && !subsection.Section.IsList()) {
+			if !subsection.Section.IsBlock() && !subsection.Section.IsList() {
 				continue
 			}
 
@@ -493,9 +493,6 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 								end++
 							}
 							tsItem = append(tsItem, si.Value[0][:end]...)
-							if tsItem[len(tsItem)-1].Type != hclsyntax.TokenNewline {
-								tsItem = append(tsItem, &tokenNewLine)
-							}
 						}
 
 						if obj {
@@ -513,6 +510,7 @@ func applyRules(sections []*ignorantparser.Section, parentType string, parentRul
 						closing := tokenCBrack
 						closing.SpacesBefore = 1
 						tokens = append(tokens, &tokenOBrack)
+
 						if subsection.Section.ListCount() == 1 {
 							tokens = append(tokens, ts[0]...)
 						}

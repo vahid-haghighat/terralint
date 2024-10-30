@@ -60,13 +60,32 @@ var tokenComma = hclwrite.Token{
 	SpacesBefore: 0,
 }
 
+var tokenFor = hclwrite.Token{
+	Type:         hclsyntax.TokenIdent,
+	Bytes:        []byte("for"),
+	SpacesBefore: 0,
+}
+
 var listForRegex, _ = regexp.Compile("for\\s.*(?:,\\s.*)?\\sin\\s.*(\\s)?:(\\s)?.*")
 
+type expressionType int
+
+const (
+	unsetExpression expressionType = iota
+	attributeExpression
+	blockExpression
+	blockAttributeExpression
+	listExpression
+	listForExpression
+	blockForExpression
+)
+
 type Section struct {
-	Type     string
-	Labels   []string
-	Value    []hclwrite.Tokens
-	Comments hclwrite.Tokens
+	Type           string
+	Labels         []string
+	Value          []hclwrite.Tokens
+	Comments       hclwrite.Tokens
+	expressionType expressionType
 }
 
 type ForExpression struct {
