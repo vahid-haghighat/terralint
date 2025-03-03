@@ -1,0 +1,11 @@
+# User-specific stuff
+.idea
+
+# CMake
+cmake-build-*/
+
+# File-based project format
+*.iws
+
+# Builds
+dist

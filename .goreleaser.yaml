@@ -1,6 +1,7 @@
 version: 2
 before:
   hooks:
+    - ./scripts/update_version.sh
     - go mod tidy
     - go generate ./...
 builds:
@@ -10,6 +11,8 @@ builds:
       - linux
       - windows
       - darwin
+    flags:
+      - -mod=vendor
 archives:
   - format: tar.gz
     name_template: >-
