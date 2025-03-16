@@ -153,3 +153,7 @@ func MergeMaps[K comparable, V any](first map[K]V, second map[K]V) map[K]V {
 
 	return result
 }
+
+func GetPointer[T any](v T) *T {
+	return &v
+}
