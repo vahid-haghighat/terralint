@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/vahid-haghighat/terralint/parser"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,14 +28,15 @@ func Check(filePath string) error {
 	}
 
 	// Parse the Terraform file to get the AST
-	_, err = ParseTerraformFile(filePath)
+	root, err := parser.ParseTerraformFile(filePath)
 	if err != nil {
 		return err
 	}
+	root = root
 
 	// Uncomment for debugging
-	// fmt.Println("Parsed Terraform AST with Comments:")
-	// printAST(root, 0)
+	fmt.Println("Parsed Terraform AST with Comments:")
+	printAST(root, 0)
 
 	formattedBytes, err := getFormattedContent(filePath)
 	if err != nil {
