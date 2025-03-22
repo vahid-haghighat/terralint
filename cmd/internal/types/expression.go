@@ -33,6 +33,7 @@ type ObjectItem struct {
 	Key           Expression
 	Value         Expression
 	InlineComment string
+	BlockComment  string // Added to capture block comments
 }
 
 func (o *ObjectExpr) ExpressionType() string {
@@ -147,15 +148,24 @@ func (d *DynamicBlock) BodyType() string {
 	return "dynamic_block"
 }
 
-// ForExpr represents for expressions: [for x in xs : upper(x)]
+// ForExpr represents for expressions: [for x in xs : upper(x)] or {for k, v in map : k => v}
 type ForExpr struct {
-	KeyVar    string     // Optional key variable for maps
-	ValueVar  string     // Value variable
-	CollExpr  Expression // Collection to iterate over
-	KeyExpr   Expression // Optional key expression for maps
-	ValueExpr Expression // Value expression
-	Condition Expression // Optional if condition
+	// Iterator variables
+	ValueVar string // The value variable name (e.g., "x" in "for x in xs" or "v" in "for k, v in map")
+	KeyVar   string // Optional key variable for maps (e.g., "k" in "for k, v in map")
+
+	// Collection being iterated
+	Collection Expression // The collection being iterated over (e.g., "xs" in "for x in xs")
+
+	// Result expressions
+	ThenKeyExpr   Expression // The value expression (e.g., "upper(x)" in "for x in xs : upper(x)")
+	ThenValueExpr Expression // Optional value expression for map outputs (e.g., "v" in "for k, v in map : k => v")
+
+	// Filtering and grouping
+	Condition Expression // Optional "if" condition (e.g., "x != null" in "for x in xs : x if x != null")
 	IsGrouped bool       // Whether this is a group by expression
+
+	// Source location
 	ExprRange sitter.Range
 }
 
