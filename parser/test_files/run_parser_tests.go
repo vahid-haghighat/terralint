@@ -84,8 +84,8 @@ func main() {
 		// Measure parsing time
 		startTime := time.Now()
 
-		// Use the debug_main.go program to parse the file
-		cmd := exec.Command("go", "run", "../debug_main.go", fullPath)
+		// Use our debug_parser.go program to parse the file
+		cmd := exec.Command("go", "run", "./parser/debug_parser.go", fullPath)
 		output, err := cmd.CombinedOutput()
 		elapsedTime := time.Since(startTime)
 

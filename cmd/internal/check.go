@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vahid-haghighat/terralint/cmd/internal/types"
+	"github.com/vahid-haghighat/terralint/parser/types"
 )
 
 func Check(filePath string) error {
