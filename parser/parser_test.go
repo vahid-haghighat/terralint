@@ -147,8 +147,21 @@ func compareBlocks(t *testing.T, expected, actual *types.Block) {
 	}
 
 	// Check if the labels match
-	if !reflect.DeepEqual(expected.Labels, actual.Labels) {
-		t.Errorf("Block labels mismatch: expected %v, got %v", expected.Labels, actual.Labels)
+	// Special case: if both are empty (nil or empty slice), consider them equal
+	if len(expected.Labels) == 0 && len(actual.Labels) == 0 {
+		// Both are empty, so they're considered equal
+	} else if !reflect.DeepEqual(expected.Labels, actual.Labels) {
+		t.Errorf("Block labels mismatch: expected %v (type: %T), got %v (type: %T)",
+			expected.Labels, expected.Labels, actual.Labels, actual.Labels)
+
+		// Print more details about the labels
+		t.Logf("Expected labels length: %d", len(expected.Labels))
+		t.Logf("Actual labels length: %d", len(actual.Labels))
+
+		if len(expected.Labels) > 0 && len(actual.Labels) > 0 {
+			t.Logf("First expected label: %q (type: %T)", expected.Labels[0], expected.Labels[0])
+			t.Logf("First actual label: %q (type: %T)", actual.Labels[0], actual.Labels[0])
+		}
 	}
 
 	// Check if the number of children matches
