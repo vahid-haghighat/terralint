@@ -252,8 +252,26 @@ func compareExpressions(t *testing.T, expected, actual types.Expression) {
 
 	// Check if the expression types match
 	if expected.ExpressionType() != actual.ExpressionType() {
-		t.Errorf("Expression type mismatch: expected %s, got %s",
-			expected.ExpressionType(), actual.ExpressionType())
+		// Print more details about the expressions
+		t.Errorf("Expression type mismatch: expected %s, got %s. Expected: %T, Actual: %T",
+			expected.ExpressionType(), actual.ExpressionType(), expected, actual)
+
+		// Print more details for reference expressions
+		if ref, ok := expected.(*types.ReferenceExpr); ok {
+			t.Logf("Expected reference parts: %v", ref.Parts)
+		}
+		if ref, ok := actual.(*types.ReferenceExpr); ok {
+			t.Logf("Actual reference parts: %v", ref.Parts)
+		}
+
+		// Print more details for array expressions
+		if arr, ok := expected.(*types.ArrayExpr); ok {
+			t.Logf("Expected array items count: %d", len(arr.Items))
+		}
+		if arr, ok := actual.(*types.ArrayExpr); ok {
+			t.Logf("Actual array items count: %d", len(arr.Items))
+		}
+
 		return
 	}
 
@@ -306,6 +324,28 @@ func compareExpressions(t *testing.T, expected, actual types.Expression) {
 		// Check if the number of items matches
 		if len(exp.Items) != len(act.Items) {
 			t.Errorf("Array items count mismatch: expected %d, got %d", len(exp.Items), len(act.Items))
+
+			// Print the array items for debugging
+			t.Logf("Expected array items:")
+			for i, item := range exp.Items {
+				switch v := item.(type) {
+				case *types.LiteralValue:
+					t.Logf("  %d: %v (%s)", i, v.Value, v.ValueType)
+				default:
+					t.Logf("  %d: %T", i, item)
+				}
+			}
+
+			t.Logf("Actual array items:")
+			for i, item := range act.Items {
+				switch v := item.(type) {
+				case *types.LiteralValue:
+					t.Logf("  %d: %v (%s)", i, v.Value, v.ValueType)
+				default:
+					t.Logf("  %d: %T", i, item)
+				}
+			}
+
 			return
 		}
 		// Compare each item

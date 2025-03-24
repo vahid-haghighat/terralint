@@ -888,8 +888,10 @@ func parseAttribute(node *sitter.Node, content []byte) (*types.Attribute, error)
 				return nil, err
 			}
 		}
-	} else if strings.Contains(exprText, ".") && !strings.HasPrefix(exprText, "\"") && !strings.Contains(exprText, "{") {
+	} else if strings.Contains(exprText, ".") && !strings.HasPrefix(exprText, "\"") &&
+		!strings.Contains(exprText, "{") && !strings.HasPrefix(exprText, "[") {
 		// This is likely a reference with dots (like var.brewdex_secret)
+		// Make sure it's not an array by checking for "[" prefix
 		parts := strings.Split(exprText, ".")
 		for i := range parts {
 			parts[i] = strings.TrimSpace(parts[i])
@@ -1464,13 +1466,30 @@ func parseArrayExpr(node *sitter.Node, content []byte) (*types.ArrayExpr, error)
 		for {
 			itemNode := cursor.CurrentNode()
 
-			// Skip separators and brackets
+			// Skip separators, brackets, and null items
 			if itemNode.Type() != "[" && itemNode.Type() != "]" && itemNode.Type() != "," {
-				item, err := parseExpression(itemNode, content)
-				if err != nil {
-					return nil, err
+				// Check if this is a meaningful item (not a null value)
+				nodeText := string(content[itemNode.StartByte():itemNode.EndByte()])
+				// Skip empty strings or whitespace only
+				if len(strings.TrimSpace(nodeText)) > 0 {
+					item, err := parseExpression(itemNode, content)
+					if err != nil {
+						return nil, err
+					}
+
+					// Skip null values
+					if literalVal, ok := item.(*types.LiteralValue); ok {
+						if literalVal.ValueType == "null" && literalVal.Value == "" {
+							// Skip this null item
+							if !cursor.GoToNextSibling() {
+								break
+							}
+							continue
+						}
+					}
+
+					array.Items = append(array.Items, item)
 				}
-				array.Items = append(array.Items, item)
 			}
 
 			if !cursor.GoToNextSibling() {
