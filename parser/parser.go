@@ -1086,7 +1086,7 @@ func parseExpression(node *sitter.Node, content []byte) (types.Expression, error
 		return parseTemplateExpr(node, content)
 	case "conditional":
 		return parseConditionalExpr(node, content)
-	case "binary_operation":
+	case "binary_operation", "operation":
 		return parseBinaryExpr(node, content)
 	case "for_expr":
 		return parseForExpr(node, content)
@@ -1674,17 +1674,47 @@ func parseTemplateExpr(node *sitter.Node, content []byte) (*types.TemplateExpr, 
 
 	return template, nil
 }
-
 func parseConditionalExpr(node *sitter.Node, content []byte) (*types.ConditionalExpr, error) {
 	condNode := findChildByFieldName(node, "condition")
-	trueNode := findChildByFieldName(node, "true_val")
-	falseNode := findChildByFieldName(node, "false_val")
 
-	if condNode == nil || trueNode == nil || falseNode == nil {
-		return nil, fmt.Errorf("conditional expression missing parts")
+	trueNode := findChildByFieldName(node, "true_val")
+	if trueNode == nil {
+		// Try alternative field names
+		trueNode = findChildByFieldName(node, "consequence")
 	}
 
-	condition, err := parseExpression(condNode, content)
+	falseNode := findChildByFieldName(node, "false_val")
+	if falseNode == nil {
+		// Try alternative field names
+		falseNode = findChildByFieldName(node, "alternative")
+	}
+
+	if condNode == nil || trueNode == nil || falseNode == nil {
+		// Try to identify the parts by position
+		if node.ChildCount() >= 5 {
+			// Typical structure: condition ? true_val : false_val
+			// Child 0: condition
+			// Child 2: true_val (after the ? operator)
+			// Child 4: false_val (after the : operator)
+			if condNode == nil && node.Child(0) != nil {
+				condNode = node.Child(0)
+			}
+			if trueNode == nil && node.Child(2) != nil {
+				trueNode = node.Child(2)
+			}
+			if falseNode == nil && node.Child(4) != nil {
+				falseNode = node.Child(4)
+			}
+		}
+
+		if condNode == nil || trueNode == nil || falseNode == nil {
+			return nil, fmt.Errorf("conditional expression missing parts")
+		}
+	}
+
+	var condition types.Expression
+	var err error
+	condition, err = parseExpression(condNode, content)
 	if err != nil {
 		return nil, err
 	}
@@ -1714,8 +1744,106 @@ func parseConditionalExpr(node *sitter.Node, content []byte) (*types.Conditional
 
 func parseBinaryExpr(node *sitter.Node, content []byte) (*types.BinaryExpr, error) {
 	leftNode := findChildByFieldName(node, "left")
+	if leftNode == nil {
+		// Try to find left operand by position
+		if node.ChildCount() >= 1 {
+			leftNode = node.Child(0)
+		}
+	}
+
 	rightNode := findChildByFieldName(node, "right")
+	if rightNode == nil {
+		// Try to find right operand by position
+		if node.ChildCount() >= 3 {
+			rightNode = node.Child(2)
+		}
+	}
+
 	operatorNode := findChildByFieldName(node, "operator")
+	if operatorNode == nil {
+		// Try to find operator by position
+		if node.ChildCount() >= 2 {
+			operatorNode = node.Child(1)
+		}
+	}
+
+	// Special case: if this is an "operation" node with a "binary_operation" child,
+	// delegate to that child
+	if node.Type() == "operation" && node.ChildCount() == 1 && node.Child(0).Type() == "binary_operation" {
+		return parseBinaryExpr(node.Child(0), content)
+	}
+
+	// Handle binary_operation nodes with a different structure
+	if node.Type() == "binary_operation" {
+		// For binary operations like "var.custom_endpoints != null", the structure is:
+		// Child 0: variable_expr (var)
+		// Child 1: get_attr (.custom_endpoints)
+		// Child 2: != (operator)
+		// Child 3: literal_value (null)
+
+		// First, determine if this is a reference with attribute access
+		var leftExpr types.Expression
+
+		// If we have a variable_expr followed by get_attr, combine them into a reference
+		if node.ChildCount() >= 2 &&
+			node.Child(0).Type() == "variable_expr" &&
+			node.Child(1).Type() == "get_attr" {
+
+			// Create a reference expression for the left side
+			varName := string(content[node.Child(0).StartByte():node.Child(0).EndByte()])
+			attrName := string(content[node.Child(1).StartByte():node.Child(1).EndByte()])
+
+			// Remove the leading dot from attribute name
+			if strings.HasPrefix(attrName, ".") {
+				attrName = attrName[1:]
+			}
+
+			// Create a reference expression
+			leftExpr = &types.ReferenceExpr{
+				Parts: []string{varName, attrName},
+				ExprRange: sitter.Range{
+					StartPoint: node.Child(0).StartPoint(),
+					EndPoint:   node.Child(1).EndPoint(),
+					StartByte:  node.Child(0).StartByte(),
+					EndByte:    node.Child(1).EndByte(),
+				},
+			}
+
+			// Now find the operator and right operand
+			var operatorNode, rightNode *sitter.Node
+
+			if node.ChildCount() >= 4 {
+				// Typical case: var.attr != null
+				operatorNode = node.Child(2)
+				rightNode = node.Child(3)
+			} else if node.ChildCount() >= 3 {
+				// Fallback case
+				operatorNode = node.Child(1)
+				rightNode = node.Child(2)
+			}
+
+			if operatorNode != nil && rightNode != nil {
+				operator := string(content[operatorNode.StartByte():operatorNode.EndByte()])
+
+				rightExpr, err := parseExpression(rightNode, content)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing right operand: %w", err)
+				}
+
+				return &types.BinaryExpr{
+					Left:     leftExpr,
+					Operator: operator,
+					Right:    rightExpr,
+					ExprRange: sitter.Range{
+						StartPoint: node.StartPoint(),
+						EndPoint:   node.EndPoint(),
+						StartByte:  node.StartByte(),
+						EndByte:    node.EndByte(),
+					},
+				}, nil
+			}
+		}
+	}
 
 	if leftNode == nil || rightNode == nil || operatorNode == nil {
 		return nil, fmt.Errorf("binary expression missing parts")

@@ -9,7 +9,6 @@ import (
 	"github.com/vahid-haghighat/terralint/parser"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 
@@ -46,228 +45,479 @@ func Check(filePath string) error {
 	return compare(original, formattedBytes)
 }
 
-func printType(value interface{}, indent int) {
-	if value == nil {
+func printType(v interface{}, indent int) {
+	indentStr := strings.Repeat("    ", indent)
+	nextIndentStr := strings.Repeat("    ", indent+1)
+
+	if v == nil {
 		fmt.Print("nil")
 		return
 	}
 
-	indentStr := strings.Repeat("\t", indent)
-	nextIndentStr := strings.Repeat("\t", indent+1)
-
-	switch v := value.(type) {
-	case *types.Block:
-		fmt.Printf("&types.Block{\n")
-		fmt.Printf("%sType:   %q,\n", nextIndentStr, v.Type)
-		fmt.Printf("%sLabels: []string{", nextIndentStr)
-		for i, label := range v.Labels {
-			fmt.Printf("%q", label)
-			if i < len(v.Labels)-1 {
-				fmt.Printf(", ")
+	switch v := v.(type) {
+	case *types.LiteralValue:
+		fmt.Printf("&types.LiteralValue{")
+		if v.Value != nil {
+			fmt.Printf("\n%sValue: ", nextIndentStr)
+			switch val := v.Value.(type) {
+			case string:
+				fmt.Printf("%q", val)
+			case bool, int, float64:
+				fmt.Printf("%v", val)
+			default:
+				fmt.Printf("%v", val)
 			}
+			fmt.Printf(",\n")
 		}
-		fmt.Printf("},\n")
+		if v.ValueType != "" {
+			fmt.Printf("%sValueType: %q,\n", nextIndentStr, v.ValueType)
+		}
+		fmt.Printf("%s}", indentStr)
 
-		if len(v.Children) > 0 {
-			fmt.Printf("%sChildren: []types.Body{\n", nextIndentStr)
-			for _, child := range v.Children {
-				fmt.Printf("%s", nextIndentStr)
-				printType(child, indent+2)
+	case *types.ObjectExpr:
+		fmt.Printf("&types.ObjectExpr{\n")
+		fmt.Printf("%sItems: []types.ObjectItem{\n", nextIndentStr)
+		for _, item := range v.Items {
+			fmt.Printf("%s{\n", strings.Repeat("    ", indent+2))
+
+			if item.Key != nil {
+				fmt.Printf("%sKey: ", strings.Repeat("    ", indent+3))
+				printType(item.Key, indent+3)
+				fmt.Printf(",\n")
+			}
+
+			if item.Value != nil {
+				fmt.Printf("%sValue: ", strings.Repeat("    ", indent+3))
+				printType(item.Value, indent+3)
+				fmt.Printf(",\n")
+			}
+
+			if item.InlineComment != "" {
+				fmt.Printf("%sInlineComment: %q,\n", strings.Repeat("    ", indent+3), item.InlineComment)
+			}
+
+			if item.BlockComment != "" {
+				fmt.Printf("%sBlockComment: %q,\n", strings.Repeat("    ", indent+3), item.BlockComment)
+			}
+
+			fmt.Printf("%s},\n", strings.Repeat("    ", indent+2))
+		}
+		fmt.Printf("%s},\n", nextIndentStr)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ArrayExpr:
+		fmt.Printf("&types.ArrayExpr{\n")
+		fmt.Printf("%sItems: []types.Expression{\n", nextIndentStr)
+		for _, item := range v.Items {
+			fmt.Printf("%s", strings.Repeat("    ", indent+2))
+			printType(item, indent+2)
+			fmt.Printf(",\n")
+		}
+		fmt.Printf("%s},\n", nextIndentStr)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ReferenceExpr:
+		fmt.Printf("&types.ReferenceExpr{\n")
+		fmt.Printf("%sParts: %#v,\n", nextIndentStr, v.Parts)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.FunctionCallExpr:
+		fmt.Printf("&types.FunctionCallExpr{\n")
+		fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
+		fmt.Printf("%sArgs: []types.Expression{\n", nextIndentStr)
+		for _, arg := range v.Args {
+			fmt.Printf("%s", strings.Repeat("    ", indent+2))
+			printType(arg, indent+2)
+			fmt.Printf(",\n")
+		}
+		fmt.Printf("%s},\n", nextIndentStr)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.TemplateExpr:
+		fmt.Printf("&types.TemplateExpr{\n")
+		fmt.Printf("%sParts: []types.Expression{\n", nextIndentStr)
+		for _, part := range v.Parts {
+			fmt.Printf("%s", strings.Repeat("    ", indent+2))
+			printType(part, indent+2)
+			fmt.Printf(",\n")
+		}
+		fmt.Printf("%s},\n", nextIndentStr)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ConditionalExpr:
+		fmt.Printf("&types.ConditionalExpr{\n")
+
+		if v.Condition != nil {
+			fmt.Printf("%sCondition: ", nextIndentStr)
+			printType(v.Condition, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.TrueExpr != nil {
+			fmt.Printf("%sTrueExpr: ", nextIndentStr)
+			printType(v.TrueExpr, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.FalseExpr != nil {
+			fmt.Printf("%sFalseExpr: ", nextIndentStr)
+			printType(v.FalseExpr, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.BinaryExpr:
+		fmt.Printf("&types.BinaryExpr{\n")
+
+		if v.Left != nil {
+			fmt.Printf("%sLeft: ", nextIndentStr)
+			printType(v.Left, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.Operator != "" {
+			fmt.Printf("%sOperator: %q,\n", nextIndentStr, v.Operator)
+		}
+
+		if v.Right != nil {
+			fmt.Printf("%sRight: ", nextIndentStr)
+			printType(v.Right, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ForExpr:
+		fmt.Printf("&types.ForExpr{\n")
+
+		// Handle iterator variables
+		if v.ValueVar != "" {
+			fmt.Printf("%sValueVar: %q,\n", nextIndentStr, v.ValueVar)
+		}
+
+		if v.KeyVar != "" {
+			fmt.Printf("%sKeyVar: %q,\n", nextIndentStr, v.KeyVar)
+		}
+
+		// Handle collection expression
+		if v.Collection != nil {
+			fmt.Printf("%sCollection: ", nextIndentStr)
+			printType(v.Collection, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		// Handle result expressions
+		if v.ThenKeyExpr != nil {
+			fmt.Printf("%sThenKeyExpr: ", nextIndentStr)
+			printType(v.ThenKeyExpr, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.ThenValueExpr != nil {
+			fmt.Printf("%sThenValueExpr: ", nextIndentStr)
+			printType(v.ThenValueExpr, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		// Handle filtering and grouping
+		if v.Condition != nil {
+			fmt.Printf("%sCondition: ", nextIndentStr)
+			printType(v.Condition, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.IsGrouped {
+			fmt.Printf("%sIsGrouped: true,\n", nextIndentStr)
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.SplatExpr:
+		fmt.Printf("&types.SplatExpr{\n")
+
+		if v.Source != nil {
+			fmt.Printf("%sSource: ", nextIndentStr)
+			printType(v.Source, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.Each != nil {
+			fmt.Printf("%sEach: ", nextIndentStr)
+			printType(v.Each, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.HeredocExpr:
+		fmt.Printf("&types.HeredocExpr{\n")
+
+		if v.Marker != "" {
+			fmt.Printf("%sMarker: %q,\n", nextIndentStr, v.Marker)
+		}
+
+		if v.Content != "" {
+			fmt.Printf("%sContent: %q,\n", nextIndentStr, v.Content)
+		}
+
+		if v.Indented {
+			fmt.Printf("%sIndented: true,\n", nextIndentStr)
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.IndexExpr:
+		fmt.Printf("&types.IndexExpr{\n")
+
+		if v.Collection != nil {
+			fmt.Printf("%sCollection: ", nextIndentStr)
+			printType(v.Collection, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if v.Key != nil {
+			fmt.Printf("%sKey: ", nextIndentStr)
+			printType(v.Key, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.TupleExpr:
+		fmt.Printf("&types.TupleExpr{\n")
+		fmt.Printf("%sExpressions: []types.Expression{\n", nextIndentStr)
+		for _, expr := range v.Expressions {
+			fmt.Printf("%s", strings.Repeat("    ", indent+2))
+			printType(expr, indent+2)
+			fmt.Printf(",\n")
+		}
+		fmt.Printf("%s},\n", nextIndentStr)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.UnaryExpr:
+		fmt.Printf("&types.UnaryExpr{\n")
+
+		if v.Operator != "" {
+			fmt.Printf("%sOperator: %q,\n", nextIndentStr, v.Operator)
+		}
+
+		if v.Expr != nil {
+			fmt.Printf("%sExpr: ", nextIndentStr)
+			printType(v.Expr, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ParenExpr:
+		fmt.Printf("&types.ParenExpr{\n")
+
+		if v.Expression != nil {
+			fmt.Printf("%sExpression: ", nextIndentStr)
+			printType(v.Expression, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.RelativeTraversalExpr:
+		fmt.Printf("&types.RelativeTraversalExpr{\n")
+
+		if v.Source != nil {
+			fmt.Printf("%sSource: ", nextIndentStr)
+			printType(v.Source, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if len(v.Traversal) > 0 {
+			fmt.Printf("%sTraversal: []types.TraversalElem{\n", nextIndentStr)
+			for _, elem := range v.Traversal {
+				fmt.Printf("%s{\n", strings.Repeat("    ", indent+2))
+				fmt.Printf("%sType: %q,\n", strings.Repeat("    ", indent+3), elem.Type)
+
+				if elem.Name != "" {
+					fmt.Printf("%sName: %q,\n", strings.Repeat("    ", indent+3), elem.Name)
+				}
+
+				if elem.Index != nil {
+					fmt.Printf("%sIndex: ", strings.Repeat("    ", indent+3))
+					printType(elem.Index, indent+3)
+					fmt.Printf(",\n")
+				}
+
+				fmt.Printf("%s},\n", strings.Repeat("    ", indent+2))
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.TemplateForDirective:
+		fmt.Printf("&types.TemplateForDirective{\n")
+
+		if v.KeyVar != "" {
+			fmt.Printf("%sKeyVar: %q,\n", nextIndentStr, v.KeyVar)
+		}
+
+		if v.ValueVar != "" {
+			fmt.Printf("%sValueVar: %q,\n", nextIndentStr, v.ValueVar)
+		}
+
+		if v.CollExpr != nil {
+			fmt.Printf("%sCollExpr: ", nextIndentStr)
+			printType(v.CollExpr, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if len(v.Content) > 0 {
+			fmt.Printf("%sContent: []types.Expression{\n", nextIndentStr)
+			for _, expr := range v.Content {
+				fmt.Printf("%s", strings.Repeat("    ", indent+2))
+				printType(expr, indent+2)
 				fmt.Printf(",\n")
 			}
 			fmt.Printf("%s},\n", nextIndentStr)
 		}
 
+		fmt.Printf("%s}", indentStr)
+
+	case *types.TemplateIfDirective:
+		fmt.Printf("&types.TemplateIfDirective{\n")
+
+		if v.Condition != nil {
+			fmt.Printf("%sCondition: ", nextIndentStr)
+			printType(v.Condition, indent+1)
+			fmt.Printf(",\n")
+		}
+
+		if len(v.TrueExpr) > 0 {
+			fmt.Printf("%sTrueExpr: []types.Expression{\n", nextIndentStr)
+			for _, expr := range v.TrueExpr {
+				fmt.Printf("%s", strings.Repeat("    ", indent+2))
+				printType(expr, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+
+		if len(v.FalseExpr) > 0 {
+			fmt.Printf("%sFalseExpr: []types.Expression{\n", nextIndentStr)
+			for _, expr := range v.FalseExpr {
+				fmt.Printf("%s", strings.Repeat("    ", indent+2))
+				printType(expr, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.TypeExpr:
+		fmt.Printf("&types.TypeExpr{\n")
+
+		if v.TypeName != "" {
+			fmt.Printf("%sTypeName: %q,\n", nextIndentStr, v.TypeName)
+		}
+
+		if len(v.Parameters) > 0 {
+			fmt.Printf("%sParameters: []types.Expression{\n", nextIndentStr)
+			for _, param := range v.Parameters {
+				fmt.Printf("%s", strings.Repeat("    ", indent+2))
+				printType(param, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	// Handle Body types as well
+	case *types.Block:
+		fmt.Printf("&types.Block{\n")
+
+		if v.Type != "" {
+			fmt.Printf("%sType: %q,\n", nextIndentStr, v.Type)
+		}
+
+		if len(v.Labels) > 0 {
+			fmt.Printf("%sLabels: %#v,\n", nextIndentStr, v.Labels)
+		}
+
 		if v.InlineComment != "" {
 			fmt.Printf("%sInlineComment: %q,\n", nextIndentStr, v.InlineComment)
 		}
+
 		if v.BlockComment != "" {
 			fmt.Printf("%sBlockComment: %q,\n", nextIndentStr, v.BlockComment)
+		}
+
+		if len(v.Children) > 0 {
+			fmt.Printf("%sChildren: []types.Body{\n", nextIndentStr)
+			for _, child := range v.Children {
+				fmt.Printf("%s", strings.Repeat("    ", indent+2))
+				printType(child, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
 		}
 
 		fmt.Printf("%s}", indentStr)
 
 	case *types.Attribute:
 		fmt.Printf("&types.Attribute{\n")
-		fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
+
+		if v.Name != "" {
+			fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
+		}
+
 		if v.Value != nil {
 			fmt.Printf("%sValue: ", nextIndentStr)
 			printType(v.Value, indent+1)
 			fmt.Printf(",\n")
 		}
+
 		if v.InlineComment != "" {
 			fmt.Printf("%sInlineComment: %q,\n", nextIndentStr, v.InlineComment)
 		}
+
 		if v.BlockComment != "" {
 			fmt.Printf("%sBlockComment: %q,\n", nextIndentStr, v.BlockComment)
 		}
-		fmt.Printf("%s}", indentStr)
 
-	case *types.LiteralValue:
-		fmt.Printf("&types.LiteralValue{\n")
-		switch val := v.Value.(type) {
-		case string:
-			fmt.Printf("%sValue:     %q,\n", nextIndentStr, val)
-		default:
-			fmt.Printf("%sValue:     %v,\n", nextIndentStr, v.Value)
-		}
-		fmt.Printf("%sValueType: %q,\n", nextIndentStr, v.ValueType)
-		fmt.Printf("%s}", indentStr)
-
-	case *types.ObjectExpr:
-		fmt.Printf("&types.ObjectExpr{\n")
-		if len(v.Items) > 0 {
-			fmt.Printf("%sItems: []types.ObjectItem{\n", nextIndentStr)
-			for _, item := range v.Items {
-				fmt.Printf("%s{\n", nextIndentStr)
-				fmt.Printf("%s\tKey: ", nextIndentStr)
-				printType(item.Key, indent+2)
-				fmt.Printf(",\n")
-				fmt.Printf("%s\tValue: ", nextIndentStr)
-				printType(item.Value, indent+2)
-				fmt.Printf(",\n")
-				if item.InlineComment != "" {
-					fmt.Printf("%s\tInlineComment: %q,\n", nextIndentStr, item.InlineComment)
-				}
-				if item.BlockComment != "" {
-					fmt.Printf("%s\tBlockComment: %q,\n", nextIndentStr, item.BlockComment)
-				}
-				fmt.Printf("%s},\n", nextIndentStr)
-			}
-			fmt.Printf("%s},\n", nextIndentStr)
-		}
-		fmt.Printf("%s}", indentStr)
-
-	case *types.ArrayExpr:
-		fmt.Printf("&types.ArrayExpr{\n")
-		if len(v.Items) > 0 {
-			fmt.Printf("%sItems: []types.Expression{\n", nextIndentStr)
-			for _, item := range v.Items {
-				fmt.Printf("%s", nextIndentStr)
-				printType(item, indent+2)
-				fmt.Printf(",\n")
-			}
-			fmt.Printf("%s},\n", nextIndentStr)
-		}
-		fmt.Printf("%s}", indentStr)
-
-	case *types.ReferenceExpr:
-		fmt.Printf("&types.ReferenceExpr{\n")
-		fmt.Printf("%sParts: []string{", nextIndentStr)
-		for i, part := range v.Parts {
-			fmt.Printf("%q", part)
-			if i < len(v.Parts)-1 {
-				fmt.Printf(", ")
-			}
-		}
-		fmt.Printf("},\n")
-		fmt.Printf("%s}", indentStr)
-
-	case *types.FunctionCallExpr:
-		fmt.Printf("&types.FunctionCallExpr{\n")
-		fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
-		if len(v.Args) > 0 {
-			fmt.Printf("%sArgs: []types.Expression{\n", nextIndentStr)
-			for _, arg := range v.Args {
-				fmt.Printf("%s", nextIndentStr)
-				printType(arg, indent+2)
-				fmt.Printf(",\n")
-			}
-			fmt.Printf("%s},\n", nextIndentStr)
-		}
-		fmt.Printf("%s}", indentStr)
-
-	case *types.TemplateExpr:
-		fmt.Printf("&types.TemplateExpr{\n")
-		if len(v.Parts) > 0 {
-			fmt.Printf("%sParts: []types.Expression{\n", nextIndentStr)
-			for _, part := range v.Parts {
-				fmt.Printf("%s", nextIndentStr)
-				printType(part, indent+2)
-				fmt.Printf(",\n")
-			}
-			fmt.Printf("%s},\n", nextIndentStr)
-		}
-		fmt.Printf("%s}", indentStr)
-
-	case *types.BinaryExpr:
-		fmt.Printf("&types.BinaryExpr{\n")
-		fmt.Printf("%sLeft: ", nextIndentStr)
-		printType(v.Left, indent+1)
-		fmt.Printf(",\n")
-		fmt.Printf("%sOperator: %q,\n", nextIndentStr, v.Operator)
-		fmt.Printf("%sRight: ", nextIndentStr)
-		printType(v.Right, indent+1)
-		fmt.Printf(",\n")
-		fmt.Printf("%s}", indentStr)
-
-	case *types.ConditionalExpr:
-		fmt.Printf("&types.ConditionalExpr{\n")
-		fmt.Printf("%sCondition: ", nextIndentStr)
-		printType(v.Condition, indent+1)
-		fmt.Printf(",\n")
-		fmt.Printf("%sTrueExpr: ", nextIndentStr)
-		printType(v.TrueExpr, indent+1)
-		fmt.Printf(",\n")
-		fmt.Printf("%sFalseExpr: ", nextIndentStr)
-		printType(v.FalseExpr, indent+1)
-		fmt.Printf(",\n")
 		fmt.Printf("%s}", indentStr)
 
 	case *types.Root:
 		fmt.Printf("&types.Root{\n")
+
 		if len(v.Children) > 0 {
 			fmt.Printf("%sChildren: []types.Body{\n", nextIndentStr)
 			for _, child := range v.Children {
-				fmt.Printf("%s", nextIndentStr)
+				fmt.Printf("%s", strings.Repeat("    ", indent+2))
 				printType(child, indent+2)
 				fmt.Printf(",\n")
 			}
 			fmt.Printf("%s},\n", nextIndentStr)
 		}
+
 		fmt.Printf("%s}", indentStr)
 
-	case *types.DynamicBlock:
-		fmt.Printf("&types.DynamicBlock{\n")
-		fmt.Printf("%sForEach: ", nextIndentStr)
-		printType(v.ForEach, indent+1)
-		fmt.Printf(",\n")
-		if v.Iterator != "" {
-			fmt.Printf("%sIterator: %q,\n", nextIndentStr, v.Iterator)
+	case *types.FormatDirective:
+		fmt.Printf("&types.FormatDirective{\n")
+
+		if v.DirectiveType != "" {
+			fmt.Printf("%sDirectiveType: %q,\n", nextIndentStr, v.DirectiveType)
 		}
-		fmt.Printf("%sLabels: []string{", nextIndentStr)
-		for i, label := range v.Labels {
-			fmt.Printf("%q", label)
-			if i < len(v.Labels)-1 {
-				fmt.Printf(", ")
-			}
+
+		if len(v.Parameters) > 0 {
+			fmt.Printf("%sParameters: %#v,\n", nextIndentStr, v.Parameters)
 		}
-		fmt.Printf("},\n")
-		if len(v.Content) > 0 {
-			fmt.Printf("%sContent: []types.Body{\n", nextIndentStr)
-			for _, content := range v.Content {
-				fmt.Printf("%s", nextIndentStr)
-				printType(content, indent+2)
-				fmt.Printf(",\n")
-			}
-			fmt.Printf("%s},\n", nextIndentStr)
-		}
-		if v.InlineComment != "" {
-			fmt.Printf("%sInlineComment: %q,\n", nextIndentStr, v.InlineComment)
-		}
-		if v.BlockComment != "" {
-			fmt.Printf("%sBlockComment: %q,\n", nextIndentStr, v.BlockComment)
-		}
+
 		fmt.Printf("%s}", indentStr)
 
 	default:
-		// For types we don't specifically handle, show the type name
-		t := reflect.TypeOf(value)
-		if t.Kind() == reflect.Ptr {
-			fmt.Printf("&%s{...}", t.Elem().String())
-		} else {
-			fmt.Printf("%s{...}", t.String())
-		}
+		// For any other types, use reflection as a fallback
+		fmt.Printf("%T(%+v)", v, v)
 	}
 }
 
