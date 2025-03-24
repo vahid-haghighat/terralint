@@ -9,6 +9,7 @@ import (
 	"github.com/vahid-haghighat/terralint/parser"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -35,8 +36,7 @@ func Check(filePath string) error {
 	root = root
 
 	// Uncomment for debugging
-	fmt.Println("Parsed Terraform AST with Comments:")
-	printAST(root, 0)
+	printType(root, 0)
 
 	formattedBytes, err := getFormattedContent(filePath)
 	if err != nil {
@@ -46,8 +46,233 @@ func Check(filePath string) error {
 	return compare(original, formattedBytes)
 }
 
-// printAST prints the AST in a readable format
-func printAST(node interface{}, indent int) {
+func printType(value interface{}, indent int) {
+	if value == nil {
+		fmt.Print("nil")
+		return
+	}
+
+	indentStr := strings.Repeat("\t", indent)
+	nextIndentStr := strings.Repeat("\t", indent+1)
+
+	switch v := value.(type) {
+	case *types.Block:
+		fmt.Printf("&types.Block{\n")
+		fmt.Printf("%sType:   %q,\n", nextIndentStr, v.Type)
+		fmt.Printf("%sLabels: []string{", nextIndentStr)
+		for i, label := range v.Labels {
+			fmt.Printf("%q", label)
+			if i < len(v.Labels)-1 {
+				fmt.Printf(", ")
+			}
+		}
+		fmt.Printf("},\n")
+
+		if len(v.Children) > 0 {
+			fmt.Printf("%sChildren: []types.Body{\n", nextIndentStr)
+			for _, child := range v.Children {
+				fmt.Printf("%s", nextIndentStr)
+				printType(child, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+
+		if v.InlineComment != "" {
+			fmt.Printf("%sInlineComment: %q,\n", nextIndentStr, v.InlineComment)
+		}
+		if v.BlockComment != "" {
+			fmt.Printf("%sBlockComment: %q,\n", nextIndentStr, v.BlockComment)
+		}
+
+		fmt.Printf("%s}", indentStr)
+
+	case *types.Attribute:
+		fmt.Printf("&types.Attribute{\n")
+		fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
+		if v.Value != nil {
+			fmt.Printf("%sValue: ", nextIndentStr)
+			printType(v.Value, indent+1)
+			fmt.Printf(",\n")
+		}
+		if v.InlineComment != "" {
+			fmt.Printf("%sInlineComment: %q,\n", nextIndentStr, v.InlineComment)
+		}
+		if v.BlockComment != "" {
+			fmt.Printf("%sBlockComment: %q,\n", nextIndentStr, v.BlockComment)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	case *types.LiteralValue:
+		fmt.Printf("&types.LiteralValue{\n")
+		switch val := v.Value.(type) {
+		case string:
+			fmt.Printf("%sValue:     %q,\n", nextIndentStr, val)
+		default:
+			fmt.Printf("%sValue:     %v,\n", nextIndentStr, v.Value)
+		}
+		fmt.Printf("%sValueType: %q,\n", nextIndentStr, v.ValueType)
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ObjectExpr:
+		fmt.Printf("&types.ObjectExpr{\n")
+		if len(v.Items) > 0 {
+			fmt.Printf("%sItems: []types.ObjectItem{\n", nextIndentStr)
+			for _, item := range v.Items {
+				fmt.Printf("%s{\n", nextIndentStr)
+				fmt.Printf("%s\tKey: ", nextIndentStr)
+				printType(item.Key, indent+2)
+				fmt.Printf(",\n")
+				fmt.Printf("%s\tValue: ", nextIndentStr)
+				printType(item.Value, indent+2)
+				fmt.Printf(",\n")
+				if item.InlineComment != "" {
+					fmt.Printf("%s\tInlineComment: %q,\n", nextIndentStr, item.InlineComment)
+				}
+				if item.BlockComment != "" {
+					fmt.Printf("%s\tBlockComment: %q,\n", nextIndentStr, item.BlockComment)
+				}
+				fmt.Printf("%s},\n", nextIndentStr)
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ArrayExpr:
+		fmt.Printf("&types.ArrayExpr{\n")
+		if len(v.Items) > 0 {
+			fmt.Printf("%sItems: []types.Expression{\n", nextIndentStr)
+			for _, item := range v.Items {
+				fmt.Printf("%s", nextIndentStr)
+				printType(item, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ReferenceExpr:
+		fmt.Printf("&types.ReferenceExpr{\n")
+		fmt.Printf("%sParts: []string{", nextIndentStr)
+		for i, part := range v.Parts {
+			fmt.Printf("%q", part)
+			if i < len(v.Parts)-1 {
+				fmt.Printf(", ")
+			}
+		}
+		fmt.Printf("},\n")
+		fmt.Printf("%s}", indentStr)
+
+	case *types.FunctionCallExpr:
+		fmt.Printf("&types.FunctionCallExpr{\n")
+		fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
+		if len(v.Args) > 0 {
+			fmt.Printf("%sArgs: []types.Expression{\n", nextIndentStr)
+			for _, arg := range v.Args {
+				fmt.Printf("%s", nextIndentStr)
+				printType(arg, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	case *types.TemplateExpr:
+		fmt.Printf("&types.TemplateExpr{\n")
+		if len(v.Parts) > 0 {
+			fmt.Printf("%sParts: []types.Expression{\n", nextIndentStr)
+			for _, part := range v.Parts {
+				fmt.Printf("%s", nextIndentStr)
+				printType(part, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	case *types.BinaryExpr:
+		fmt.Printf("&types.BinaryExpr{\n")
+		fmt.Printf("%sLeft: ", nextIndentStr)
+		printType(v.Left, indent+1)
+		fmt.Printf(",\n")
+		fmt.Printf("%sOperator: %q,\n", nextIndentStr, v.Operator)
+		fmt.Printf("%sRight: ", nextIndentStr)
+		printType(v.Right, indent+1)
+		fmt.Printf(",\n")
+		fmt.Printf("%s}", indentStr)
+
+	case *types.ConditionalExpr:
+		fmt.Printf("&types.ConditionalExpr{\n")
+		fmt.Printf("%sCondition: ", nextIndentStr)
+		printType(v.Condition, indent+1)
+		fmt.Printf(",\n")
+		fmt.Printf("%sTrueExpr: ", nextIndentStr)
+		printType(v.TrueExpr, indent+1)
+		fmt.Printf(",\n")
+		fmt.Printf("%sFalseExpr: ", nextIndentStr)
+		printType(v.FalseExpr, indent+1)
+		fmt.Printf(",\n")
+		fmt.Printf("%s}", indentStr)
+
+	case *types.Root:
+		fmt.Printf("&types.Root{\n")
+		if len(v.Children) > 0 {
+			fmt.Printf("%sChildren: []types.Body{\n", nextIndentStr)
+			for _, child := range v.Children {
+				fmt.Printf("%s", nextIndentStr)
+				printType(child, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	case *types.DynamicBlock:
+		fmt.Printf("&types.DynamicBlock{\n")
+		fmt.Printf("%sForEach: ", nextIndentStr)
+		printType(v.ForEach, indent+1)
+		fmt.Printf(",\n")
+		if v.Iterator != "" {
+			fmt.Printf("%sIterator: %q,\n", nextIndentStr, v.Iterator)
+		}
+		fmt.Printf("%sLabels: []string{", nextIndentStr)
+		for i, label := range v.Labels {
+			fmt.Printf("%q", label)
+			if i < len(v.Labels)-1 {
+				fmt.Printf(", ")
+			}
+		}
+		fmt.Printf("},\n")
+		if len(v.Content) > 0 {
+			fmt.Printf("%sContent: []types.Body{\n", nextIndentStr)
+			for _, content := range v.Content {
+				fmt.Printf("%s", nextIndentStr)
+				printType(content, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
+		}
+		if v.InlineComment != "" {
+			fmt.Printf("%sInlineComment: %q,\n", nextIndentStr, v.InlineComment)
+		}
+		if v.BlockComment != "" {
+			fmt.Printf("%sBlockComment: %q,\n", nextIndentStr, v.BlockComment)
+		}
+		fmt.Printf("%s}", indentStr)
+
+	default:
+		// For types we don't specifically handle, show the type name
+		t := reflect.TypeOf(value)
+		if t.Kind() == reflect.Ptr {
+			fmt.Printf("&%s{...}", t.Elem().String())
+		} else {
+			fmt.Printf("%s{...}", t.String())
+		}
+	}
+}
+
+// printASTHumanReadable prints the AST in a readable format
+func printASTHumanReadable(node interface{}, indent int) {
 	indentStr := strings.Repeat("  ", indent)
 
 	switch n := node.(type) {
@@ -55,7 +280,7 @@ func printAST(node interface{}, indent int) {
 		fmt.Printf("%sRoot with %d children\n", indentStr, len(n.Children))
 		for _, child := range n.Children {
 			if child != nil {
-				printAST(child, indent+1)
+				printASTHumanReadable(child, indent+1)
 			}
 		}
 	case *types.Block:
@@ -68,7 +293,7 @@ func printAST(node interface{}, indent int) {
 			fmt.Printf("%s  InlineComment: %s\n", indentStr, n.InlineComment)
 		}
 		for _, child := range n.Children {
-			printAST(child, indent+1)
+			printASTHumanReadable(child, indent+1)
 		}
 	case *types.Attribute:
 		fmt.Printf("%sAttribute: Name=%s, Value=%v\n",
@@ -84,7 +309,7 @@ func printAST(node interface{}, indent int) {
 			indentStr, n.Labels, n.Iterator)
 		fmt.Printf("%s  ForEach: %v\n", indentStr, getExpressionSummary(n.ForEach))
 		for _, child := range n.Content {
-			printAST(child, indent+1)
+			printASTHumanReadable(child, indent+1)
 		}
 	default:
 		fmt.Printf("%sUnknown node type: %T\n", indentStr, n)

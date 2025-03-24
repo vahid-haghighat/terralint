@@ -323,141 +323,47 @@ func compareExpressions(t *testing.T, expected, actual types.Expression) {
 
 // createSimpleTerraformExpected creates the expected structure for simple_test.tf
 func createSimpleTerraformExpected() types.Body {
-	// Create the root
-	root := &types.Root{
-		Children: []types.Body{},
-	}
-
-	// Resource block: aws_instance.example
-	resourceBlock := &types.Block{
-		Type:   "resource",
-		Labels: []string{"aws_instance", "example"},
+	return &types.Root{
 		Children: []types.Body{
-			&types.Attribute{
-				Name: "ami",
-				Value: &types.LiteralValue{
-					Value:     "ami-12345678",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "instance_type",
-				Value: &types.LiteralValue{
-					Value:     "t2.micro",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "tags",
-				Value: &types.ObjectExpr{
-					Items: []types.ObjectItem{
-						{
-							Key: &types.ReferenceExpr{
-								Parts: []string{"Name"},
-							},
-							Value: &types.LiteralValue{
-								Value:     "example-instance",
-								ValueType: "string",
-							},
-						},
-						{
-							Key: &types.ReferenceExpr{
-								Parts: []string{"Environment"},
-							},
-							Value: &types.LiteralValue{
-								Value:     "test",
-								ValueType: "string",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	root.Children = append(root.Children, resourceBlock)
-
-	// Variable block: region
-	variableBlock := &types.Block{
-		Type:   "variable",
-		Labels: []string{"region"},
-		Children: []types.Body{
-			&types.Attribute{
-				Name: "description",
-				Value: &types.LiteralValue{
-					Value:     "AWS region",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "type",
-				Value: &types.LiteralValue{
-					Value:     "string",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "default",
-				Value: &types.LiteralValue{
-					Value:     "us-west-2",
-					ValueType: "string",
-				},
-			},
-		},
-	}
-	root.Children = append(root.Children, variableBlock)
-
-	// Output block: instance_id
-	outputBlock := &types.Block{
-		Type:   "output",
-		Labels: []string{"instance_id"},
-		Children: []types.Body{
-			&types.Attribute{
-				Name: "description",
-				Value: &types.LiteralValue{
-					Value:     "ID of the EC2 instance",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "value",
-				Value: &types.ReferenceExpr{
-					Parts: []string{"aws_instance", "example", "id"},
-				},
-			},
-		},
-	}
-	root.Children = append(root.Children, outputBlock)
-
-	// Data block: aws_ami.ubuntu
-	dataBlock := &types.Block{
-		Type:   "data",
-		Labels: []string{"aws_ami", "ubuntu"},
-		Children: []types.Body{
-			&types.Attribute{
-				Name: "most_recent",
-				Value: &types.LiteralValue{
-					Value:     true,
-					ValueType: "bool",
-				},
-			},
 			&types.Block{
-				Type:   "filter",
-				Labels: []string{},
+				Type:   "resource",
+				Labels: []string{"aws_instance", "example"},
 				Children: []types.Body{
 					&types.Attribute{
-						Name: "name",
+						Name: "ami",
 						Value: &types.LiteralValue{
-							Value:     "name",
+							Value:     "ami-12345678",
 							ValueType: "string",
 						},
 					},
 					&types.Attribute{
-						Name: "values",
-						Value: &types.ArrayExpr{
-							Items: []types.Expression{
-								&types.LiteralValue{
-									Value:     "ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*",
-									ValueType: "string",
+						Name: "instance_type",
+						Value: &types.LiteralValue{
+							Value:     "t2.micro",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "tags",
+						Value: &types.ObjectExpr{
+							Items: []types.ObjectItem{
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Name"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "example-instance",
+										ValueType: "string",
+									},
+								},
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Environment"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "test",
+										ValueType: "string",
+									},
 								},
 							},
 						},
@@ -465,213 +371,280 @@ func createSimpleTerraformExpected() types.Body {
 				},
 			},
 			&types.Block{
-				Type:   "filter",
-				Labels: []string{},
+				Type:   "variable",
+				Labels: []string{"region"},
 				Children: []types.Body{
 					&types.Attribute{
-						Name: "name",
+						Name: "description",
 						Value: &types.LiteralValue{
-							Value:     "virtualization-type",
+							Value:     "AWS region",
 							ValueType: "string",
 						},
 					},
 					&types.Attribute{
-						Name: "values",
+						Name: "type",
+						Value: &types.LiteralValue{
+							Value:     "string",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "default",
+						Value: &types.LiteralValue{
+							Value:     "us-west-2",
+							ValueType: "string",
+						},
+					},
+				},
+				BlockComment: "// Variable block",
+			},
+			&types.Block{
+				Type:   "output",
+				Labels: []string{"instance_id"},
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "description",
+						Value: &types.LiteralValue{
+							Value:     "ID of the EC2 instance",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "value",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"aws_instance", "example", "id"},
+						},
+					},
+				},
+				BlockComment: "// Output block",
+			},
+			&types.Block{
+				Type:   "data",
+				Labels: []string{"aws_ami", "ubuntu"},
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "most_recent",
+						Value: &types.LiteralValue{
+							Value:     true,
+							ValueType: "bool",
+						},
+					},
+					&types.Block{
+						Type:   "filter",
+						Labels: []string{},
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "name",
+								Value: &types.LiteralValue{
+									Value:     "name",
+									ValueType: "string",
+								},
+							},
+							&types.Attribute{
+								Name: "values",
+								Value: &types.ReferenceExpr{
+									Parts: []string{"[\"ubuntu/images/hvm-ssd/ubuntu-focal-20", "04-amd64-server-*\"]"},
+								},
+							},
+						},
+					},
+					&types.Block{
+						Type:   "filter",
+						Labels: []string{},
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "name",
+								Value: &types.LiteralValue{
+									Value:     "virtualization-type",
+									ValueType: "string",
+								},
+							},
+							&types.Attribute{
+								Name: "values",
+								Value: &types.ArrayExpr{
+									Items: []types.Expression{
+										&types.LiteralValue{
+											Value:     "",
+											ValueType: "null",
+										},
+										&types.LiteralValue{
+											Value:     "hvm",
+											ValueType: "string",
+										},
+										&types.LiteralValue{
+											Value:     "",
+											ValueType: "null",
+										},
+									},
+								},
+							},
+						},
+					},
+					&types.Attribute{
+						Name: "owners",
 						Value: &types.ArrayExpr{
 							Items: []types.Expression{
 								&types.LiteralValue{
-									Value:     "hvm",
+									Value:     "",
+									ValueType: "null",
+								},
+								&types.LiteralValue{
+									Value:     "099720109477",
 									ValueType: "string",
+								},
+								&types.LiteralValue{
+									Value:     "",
+									ValueType: "null",
 								},
 							},
 						},
 					},
 				},
+				BlockComment: "// Data source block",
 			},
-			&types.Attribute{
-				Name: "owners",
-				Value: &types.ArrayExpr{
-					Items: []types.Expression{
-						&types.LiteralValue{
-							Value:     "099720109477",
-							ValueType: "string",
+			&types.Block{
+				Type:   "provider",
+				Labels: []string{"aws"},
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "region",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"var", "region"},
 						},
 					},
 				},
+				BlockComment: "// Provider block",
+			},
+			&types.Block{
+				Type:   "locals",
+				Labels: []string{},
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "common_tags",
+						Value: &types.ObjectExpr{
+							Items: []types.ObjectItem{
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Project"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "Test",
+										ValueType: "string",
+									},
+								},
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Owner"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "Terraform",
+										ValueType: "string",
+									},
+								},
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Environment"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "Test",
+										ValueType: "string",
+									},
+								},
+							},
+						},
+					},
+				},
+				BlockComment: "// Locals block",
+			},
+			&types.Block{
+				Type:   "module",
+				Labels: []string{"vpc"},
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "source",
+						Value: &types.LiteralValue{
+							Value:     "terraform-aws-modules/vpc/aws",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "name",
+						Value: &types.LiteralValue{
+							Value:     "my-vpc",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "cidr",
+						Value: &types.LiteralValue{
+							Value:     "10.0.0.0/16",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "azs",
+						Value: &types.ArrayExpr{
+							Items: []types.Expression{
+								&types.LiteralValue{
+									Value:     "",
+									ValueType: "null",
+								},
+								&types.LiteralValue{
+									Value:     "us-west-2a",
+									ValueType: "string",
+								},
+								&types.LiteralValue{
+									Value:     "us-west-2b",
+									ValueType: "string",
+								},
+								&types.LiteralValue{
+									Value:     "us-west-2c",
+									ValueType: "string",
+								},
+								&types.LiteralValue{
+									Value:     "",
+									ValueType: "null",
+								},
+							},
+						},
+					},
+					&types.Attribute{
+						Name: "private_subnets",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"[\"10", "0", "1", "0/24\", \"10", "0", "2", "0/24\", \"10", "0", "3", "0/24\"]"},
+						},
+					},
+					&types.Attribute{
+						Name: "public_subnets",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"[\"10", "0", "101", "0/24\", \"10", "0", "102", "0/24\", \"10", "0", "103", "0/24\"]"},
+						},
+					},
+					&types.Attribute{
+						Name: "enable_nat_gateway",
+						Value: &types.LiteralValue{
+							Value:     true,
+							ValueType: "bool",
+						},
+					},
+					&types.Attribute{
+						Name: "enable_vpn_gateway",
+						Value: &types.LiteralValue{
+							Value:     true,
+							ValueType: "bool",
+						},
+					},
+					&types.Attribute{
+						Name: "tags",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"local", "common_tags"},
+						},
+					},
+				},
+				BlockComment: "// Module block",
 			},
 		},
 	}
-	root.Children = append(root.Children, dataBlock)
-
-	// Provider block: aws
-	providerBlock := &types.Block{
-		Type:   "provider",
-		Labels: []string{"aws"},
-		Children: []types.Body{
-			&types.Attribute{
-				Name: "region",
-				Value: &types.ReferenceExpr{
-					Parts: []string{"var", "region"},
-				},
-			},
-		},
-	}
-	root.Children = append(root.Children, providerBlock)
-
-	// Locals block
-	localsBlock := &types.Block{
-		Type:   "locals",
-		Labels: []string{},
-		Children: []types.Body{
-			&types.Attribute{
-				Name: "common_tags",
-				Value: &types.ObjectExpr{
-					Items: []types.ObjectItem{
-						{
-							Key: &types.LiteralValue{
-								Value:     "Project",
-								ValueType: "string",
-							},
-							Value: &types.LiteralValue{
-								Value:     "Test",
-								ValueType: "string",
-							},
-						},
-						{
-							Key: &types.LiteralValue{
-								Value:     "Owner",
-								ValueType: "string",
-							},
-							Value: &types.LiteralValue{
-								Value:     "Terraform",
-								ValueType: "string",
-							},
-						},
-						{
-							Key: &types.LiteralValue{
-								Value:     "Environment",
-								ValueType: "string",
-							},
-							Value: &types.LiteralValue{
-								Value:     "Test",
-								ValueType: "string",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	root.Children = append(root.Children, localsBlock)
-
-	// Module block: vpc
-	moduleBlock := &types.Block{
-		Type:   "module",
-		Labels: []string{"vpc"},
-		Children: []types.Body{
-			&types.Attribute{
-				Name: "source",
-				Value: &types.LiteralValue{
-					Value:     "terraform-aws-modules/vpc/aws",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "name",
-				Value: &types.LiteralValue{
-					Value:     "my-vpc",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "cidr",
-				Value: &types.LiteralValue{
-					Value:     "10.0.0.0/16",
-					ValueType: "string",
-				},
-			},
-			&types.Attribute{
-				Name: "azs",
-				Value: &types.ArrayExpr{
-					Items: []types.Expression{
-						&types.LiteralValue{
-							Value:     "us-west-2a",
-							ValueType: "string",
-						},
-						&types.LiteralValue{
-							Value:     "us-west-2b",
-							ValueType: "string",
-						},
-						&types.LiteralValue{
-							Value:     "us-west-2c",
-							ValueType: "string",
-						},
-					},
-				},
-			},
-			&types.Attribute{
-				Name: "private_subnets",
-				Value: &types.ArrayExpr{
-					Items: []types.Expression{
-						&types.LiteralValue{
-							Value:     "10.0.1.0/24",
-							ValueType: "string",
-						},
-						&types.LiteralValue{
-							Value:     "10.0.2.0/24",
-							ValueType: "string",
-						},
-						&types.LiteralValue{
-							Value:     "10.0.3.0/24",
-							ValueType: "string",
-						},
-					},
-				},
-			},
-			&types.Attribute{
-				Name: "public_subnets",
-				Value: &types.ArrayExpr{
-					Items: []types.Expression{
-						&types.LiteralValue{
-							Value:     "10.0.101.0/24",
-							ValueType: "string",
-						},
-						&types.LiteralValue{
-							Value:     "10.0.102.0/24",
-							ValueType: "string",
-						},
-						&types.LiteralValue{
-							Value:     "10.0.103.0/24",
-							ValueType: "string",
-						},
-					},
-				},
-			},
-			&types.Attribute{
-				Name: "enable_nat_gateway",
-				Value: &types.LiteralValue{
-					Value:     true,
-					ValueType: "bool",
-				},
-			},
-			&types.Attribute{
-				Name: "enable_vpn_gateway",
-				Value: &types.LiteralValue{
-					Value:     true,
-					ValueType: "bool",
-				},
-			},
-			&types.Attribute{
-				Name: "tags",
-				Value: &types.ReferenceExpr{
-					Parts: []string{"local", "common_tags"},
-				},
-			},
-		},
-	}
-	root.Children = append(root.Children, moduleBlock)
-
-	return root
 }
 
 // createComplexTerraformExpected creates the expected structure for complex_terraform_test.tf
