@@ -317,15 +317,6 @@ func compareExpressions(t *testing.T, expected, actual types.Expression) {
 	// Add more expression type comparisons as needed
 }
 
-// createEdgeCasesExpected creates the expected structure for edge_cases_test.tf
-func createEdgeCasesExpected() types.Body {
-	// For now, return a minimal structure
-	root := &types.Root{
-		Children: []types.Body{},
-	}
-	return root
-}
-
 // Helper function to compare string slices
 func compareStringSlices(a, b []string) bool {
 	if len(a) != len(b) {

@@ -14,6 +14,30 @@ import (
 	"github.com/vahid-haghighat/terralint/parser/types"
 )
 
+// debugEnabled controls whether debug output is printed
+var debugEnabled = false
+
+// debugPrint prints debug information if debugging is enabled
+func debugPrint(format string, args ...interface{}) {
+	if debugEnabled {
+		fmt.Printf("DEBUG: "+format+"\n", args...)
+	}
+}
+
+// truncateString truncates a string to the specified length and adds "..." if truncated
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// getCallStack returns a simplified call stack for debugging
+func getCallStack(skip int) string {
+	// This is a simplified version that just returns the function name
+	return "Call stack info"
+}
+
 // ParseJsonValue parses a string as JSON and returns the corresponding Go type
 func ParseJsonValue(jsonString string) (interface{}, error) {
 	var result interface{}
@@ -390,6 +414,21 @@ func ParseTerraformFile(filePath string) (*types.Root, error) {
 // parseNode parses a tree-sitter node into our AST structure
 func parseNode(node *sitter.Node, content []byte) (types.Body, error) {
 	nodeType := node.Type()
+
+	// Add detailed debug output
+	nodeText := string(content[node.StartByte():node.EndByte()])
+	debugPrint("parseNode - type: %s, line: %d, text: %q",
+		nodeType, node.StartPoint().Row+1, truncateString(nodeText, 50))
+
+	// Print child nodes for debugging
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child != nil {
+			childText := string(content[child.StartByte():child.EndByte()])
+			debugPrint("  Child %d: type=%s, text=%q",
+				i, child.Type(), truncateString(childText, 30))
+		}
+	}
 
 	switch nodeType {
 	case "block":
@@ -1052,6 +1091,13 @@ func parseExpression(node *sitter.Node, content []byte) (types.Expression, error
 	// Get the full text of the expression
 	fullText := string(content[node.StartByte():node.EndByte()])
 
+	// Add debug output
+	debugPrint("parseExpression - type: %s, line: %d, text: %q",
+		node.Type(), node.StartPoint().Row+1, truncateString(fullText, 50))
+
+	// Print call stack for debugging
+	debugPrint("Call stack: %s", getCallStack(2))
+
 	// Special case for for expressions in attribute values
 	// These might be parsed as references instead of for expressions
 	if strings.Contains(fullText, "for") && strings.Contains(fullText, "in") && strings.Contains(fullText, ":") &&
@@ -1086,7 +1132,14 @@ func parseExpression(node *sitter.Node, content []byte) (types.Expression, error
 		return parseTemplateExpr(node, content)
 	case "conditional":
 		return parseConditionalExpr(node, content)
-	case "binary_operation", "operation":
+	case "binary_operation":
+		return parseBinaryExpr(node, content)
+	case "operation":
+		// Check if this is a unary operation or a binary operation
+		if node.ChildCount() == 1 && node.Child(0).Type() == "unary_operation" {
+			debugPrint("Detected unary operation: %s", truncateString(fullText, 30))
+			return parseUnaryExpr(node.Child(0), content)
+		}
 		return parseBinaryExpr(node, content)
 	case "for_expr":
 		return parseForExpr(node, content)
@@ -1743,6 +1796,21 @@ func parseConditionalExpr(node *sitter.Node, content []byte) (*types.Conditional
 }
 
 func parseBinaryExpr(node *sitter.Node, content []byte) (*types.BinaryExpr, error) {
+	// Add detailed debug output
+	nodeText := string(content[node.StartByte():node.EndByte()])
+	debugPrint("parseBinaryExpr - type: %s, line: %d, text: %q, children: %d",
+		node.Type(), node.StartPoint().Row+1, truncateString(nodeText, 50), node.ChildCount())
+
+	// Print all children
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child != nil {
+			childText := string(content[child.StartByte():child.EndByte()])
+			debugPrint("  Child %d: type=%s, text=%q",
+				i, child.Type(), truncateString(childText, 30))
+		}
+	}
+
 	leftNode := findChildByFieldName(node, "left")
 	if leftNode == nil {
 		// Try to find left operand by position
@@ -2620,9 +2688,77 @@ func parseTupleExpr(node *sitter.Node, content []byte) (*types.TupleExpr, error)
 }
 
 func parseUnaryExpr(node *sitter.Node, content []byte) (*types.UnaryExpr, error) {
-	operatorNode := findChildByFieldName(node, "operator")
-	expressionNode := findChildByFieldName(node, "expression")
+	// Add debug output
+	nodeText := string(content[node.StartByte():node.EndByte()])
+	debugPrint("parseUnaryExpr - type: %s, line: %d, text: %q, children: %d",
+		node.Type(), node.StartPoint().Row+1, truncateString(nodeText, 30), node.ChildCount())
 
+	// Print all children
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child != nil {
+			childText := string(content[child.StartByte():child.EndByte()])
+			debugPrint("  Child %d: type=%s, text=%q",
+				i, child.Type(), truncateString(childText, 30))
+		}
+	}
+
+	operatorNode := findChildByFieldName(node, "operator")
+	if operatorNode == nil {
+		debugPrint("Could not find field 'operator', trying to infer from structure")
+		// For unary operations like -42, the operator is often the first character
+		if node.ChildCount() >= 1 {
+			// Check if the first character is a unary operator
+			if len(nodeText) > 0 && (nodeText[0] == '-' || nodeText[0] == '!') {
+				// Create a simple literal value for the operand
+				valueText := nodeText[1:]
+				debugPrint("Inferred unary operation: %c%s", nodeText[0], valueText)
+
+				// Parse the operand
+				var expr types.Expression
+				var err error
+
+				// Try to parse the value as a number
+				if nodeText[0] == '-' {
+					// For negative numbers, parse as a number
+					num, err := strconv.ParseFloat(valueText, 64)
+					if err == nil {
+						expr = &types.LiteralValue{
+							Value:     num,
+							ValueType: "number",
+							ExprRange: sitter.Range{
+								StartPoint: node.StartPoint(),
+								EndPoint:   node.EndPoint(),
+								StartByte:  node.StartByte() + 1,
+								EndByte:    node.EndByte(),
+							},
+						}
+					}
+				}
+
+				if expr == nil {
+					// If not a number or not a negative, parse as a regular expression
+					expr, err = parseExpression(node.Child(0), content)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				return &types.UnaryExpr{
+					Operator: string(nodeText[0]),
+					Expr:     expr,
+					ExprRange: sitter.Range{
+						StartPoint: node.StartPoint(),
+						EndPoint:   node.EndPoint(),
+						StartByte:  node.StartByte(),
+						EndByte:    node.EndByte(),
+					},
+				}, nil
+			}
+		}
+	}
+
+	expressionNode := findChildByFieldName(node, "expression")
 	if operatorNode == nil || expressionNode == nil {
 		return nil, fmt.Errorf("unary expression missing parts")
 	}

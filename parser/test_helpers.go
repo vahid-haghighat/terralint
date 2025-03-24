@@ -3989,3 +3989,853 @@ func createModuleExpected() types.Body {
 		},
 	}
 }
+
+// createEdgeCasesExpected creates the expected structure for edge_cases_test.tf
+func createEdgeCasesExpected() types.Body {
+	return &types.Root{
+		Children: []types.Body{
+			&types.Block{
+				Type:   "resource",
+				Labels: []string{"null_resource", "empty"},
+			},
+			&types.Block{
+				Type:         "resource",
+				Labels:       []string{"null_resource", "comments_only"},
+				BlockComment: "// Resource with only comments",
+			},
+			&types.Block{
+				Type:         "locals",
+				BlockComment: "// Extremely long line",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "extremely_long_line",
+						Value: &types.LiteralValue{
+							Value:     "This is an extremely long line that exceeds the typical line length limit. It's designed to test how the parser handles very long lines. The line continues for a while to ensure it's long enough to potentially cause issues with buffers or other limitations in the parser. It includes some special characters like quotes (\\\"), backslashes (\\\\), and other potentially problematic characters: !@#$%^&*()_+-=[]{}|;:,.<>?/",
+							ValueType: "string",
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "resource",
+				Labels:       []string{"aws_instance", "unusual_whitespace"},
+				BlockComment: "// Unusual whitespace",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "ami",
+						Value: &types.LiteralValue{
+							Value:     "ami-12345678",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "instance_type",
+						Value: &types.LiteralValue{
+							Value:     "t2.micro",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "tags",
+						Value: &types.ObjectExpr{
+							Items: []types.ObjectItem{
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Name"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "unusual-whitespace",
+										ValueType: "string",
+									},
+								},
+								{
+									Key: &types.ReferenceExpr{
+										Parts: []string{"Environment"},
+									},
+									Value: &types.LiteralValue{
+										Value:     "test",
+										ValueType: "string",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "locals",
+				BlockComment: "// Nested conditionals",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "nested_conditionals",
+						Value: &types.ConditionalExpr{
+							Condition: &types.LiteralValue{
+								Value:     true,
+								ValueType: "bool",
+							},
+							TrueExpr: &types.ConditionalExpr{
+								Condition: &types.LiteralValue{
+									Value:     false,
+									ValueType: "bool",
+								},
+								TrueExpr: &types.LiteralValue{
+									Value:     "a",
+									ValueType: "string",
+								},
+								FalseExpr: &types.ConditionalExpr{
+									Condition: &types.LiteralValue{
+										Value:     true,
+										ValueType: "bool",
+									},
+									TrueExpr: &types.LiteralValue{
+										Value:     "b",
+										ValueType: "string",
+									},
+									FalseExpr: &types.ConditionalExpr{
+										Condition: &types.LiteralValue{
+											Value:     false,
+											ValueType: "bool",
+										},
+										TrueExpr: &types.LiteralValue{
+											Value:     "c",
+											ValueType: "string",
+										},
+										FalseExpr: &types.ConditionalExpr{
+											Condition: &types.LiteralValue{
+												Value:     true,
+												ValueType: "bool",
+											},
+											TrueExpr: &types.LiteralValue{
+												Value:     "d",
+												ValueType: "string",
+											},
+											FalseExpr: &types.LiteralValue{
+												Value:     "e",
+												ValueType: "string",
+											},
+										},
+									},
+								},
+							},
+							FalseExpr: &types.LiteralValue{
+								Value:     "f",
+								ValueType: "string",
+							},
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "variable",
+				Labels:       []string{"duplicate"},
+				BlockComment: "// Multiple blocks with the same name",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "type",
+						Value: &types.LiteralValue{
+							Value:     "string",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "default",
+						Value: &types.LiteralValue{
+							Value:     "first",
+							ValueType: "string",
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:   "variable",
+				Labels: []string{"duplicate"},
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "type",
+						Value: &types.LiteralValue{
+							Value:     "number",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "default",
+						Value: &types.LiteralValue{
+							Value:     123,
+							ValueType: "number",
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "locals",
+				BlockComment: "// Unicode characters",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "unicode",
+						Value: &types.LiteralValue{
+							Value:     "こんにちは世界 • Hello, World! • Привет, мир! • مرحبا بالعالم • 你好，世界！",
+							ValueType: "string",
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "locals",
+				BlockComment: "// Escaped sequences",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "escaped",
+						Value: &types.LiteralValue{
+							Value:     "Line 1\\nLine 2\\tTabbed\\r\\nWindows line ending\\\\\\\\ Double backslash \\\" Quote",
+							ValueType: "string",
+						},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "locals",
+				BlockComment: "// Empty strings and special values",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "empty_string",
+						Value: &types.LiteralValue{
+							Value:     "",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "single_space",
+						Value: &types.LiteralValue{
+							Value:     " ",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "just_newline",
+						Value: &types.LiteralValue{
+							Value:     "\\n",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name:  "null_value",
+						Value: &types.LiteralValue{ValueType: "null"},
+					},
+				},
+			},
+			&types.Block{
+				Type:         "locals",
+				BlockComment: "// Unusual numbers",
+				Children: []types.Body{
+					&types.Attribute{
+						Name: "zero",
+						Value: &types.LiteralValue{
+							Value:     0,
+							ValueType: "number",
+						},
+					},
+					&types.Attribute{
+						Name: "negative",
+						Value: &types.UnaryExpr{
+							Operator: "-",
+							Expr: &types.LiteralValue{
+								Value:     42,
+								ValueType: "number",
+							},
+						},
+					},
+					&types.Attribute{
+						Name: "decimal",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"3", "14159265359"},
+						},
+					},
+					&types.Attribute{
+						Name: "scientific",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"1", "23e45"},
+						},
+					},
+					&types.Attribute{
+						Name: "hex",
+						Value: &types.LiteralValue{
+							Value:     "0xDEADBEEF",
+							ValueType: "string",
+						},
+					},
+					&types.Attribute{
+						Name: "octal",
+						Value: &types.LiteralValue{
+							Value:     0,
+							ValueType: "number",
+						},
+					},
+					&types.Attribute{
+						Name: "o755",
+						Value: &types.LiteralValue{
+							Value:     0,
+							ValueType: "number",
+						},
+					},
+					&types.Block{
+						Type:   "b10101010",
+						Labels: []string{"aws_instance", "special-chars_in.identifier"},
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "ami",
+								Value: &types.LiteralValue{
+									Value:     "ami-12345678",
+									ValueType: "string",
+								},
+							},
+							&types.Attribute{
+								Name: "instance_type",
+								Value: &types.LiteralValue{
+									Value:     "t2.micro",
+									ValueType: "string",
+								},
+							},
+						},
+					},
+					&types.Block{
+						Type:         "provider",
+						Labels:       []string{"aws"},
+						BlockComment: "// Provider with unusual configuration",
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "region",
+								Value: &types.LiteralValue{
+									Value:     "us-west-2",
+									ValueType: "string",
+								},
+							},
+							&types.Attribute{
+								Name: "alias",
+								Value: &types.LiteralValue{
+									Value:     "unusual",
+									ValueType: "string",
+								},
+							},
+							&types.Block{
+								Type: "assume_role",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "role_arn",
+										Value: &types.LiteralValue{
+											Value:     "arn:aws:iam::123456789012:role/unusual-role",
+											ValueType: "string",
+										},
+									},
+									&types.Attribute{
+										Name: "session_name",
+										Value: &types.LiteralValue{
+											Value:     "unusual-session",
+											ValueType: "string",
+										},
+									},
+								},
+							},
+							&types.Block{
+								Type: "default_tags",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "tags",
+										Value: &types.ObjectExpr{
+											Items: []types.ObjectItem{
+												{
+													Key: &types.ReferenceExpr{
+														Parts: []string{"ManagedBy"},
+													},
+													Value: &types.LiteralValue{
+														Value:     "Terraform",
+														ValueType: "string",
+													},
+												},
+												{
+													Key: &types.ReferenceExpr{
+														Parts: []string{"Environment"},
+													},
+													Value: &types.LiteralValue{
+														Value:     "Test",
+														ValueType: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							&types.Block{
+								Type: "ignore_tags",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "keys",
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.LiteralValue{
+													Value:     "",
+													ValueType: "null",
+												},
+												&types.LiteralValue{
+													Value:     "IgnoreMe",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "AlsoIgnoreMe",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "",
+													ValueType: "null",
+												},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "key_prefixes",
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.LiteralValue{
+													Value:     "",
+													ValueType: "null",
+												},
+												&types.LiteralValue{
+													Value:     "temp-",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "tmp-",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "",
+													ValueType: "null",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					&types.Block{
+						Type:         "resource",
+						Labels:       []string{"aws_security_group", "nested_blocks"},
+						BlockComment: "// Unusual block nesting",
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "name",
+								Value: &types.LiteralValue{
+									Value:     "nested-blocks",
+									ValueType: "string",
+								},
+							},
+							&types.Block{
+								Type: "ingress",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "description",
+										Value: &types.LiteralValue{
+											Value:     "First level",
+											ValueType: "string",
+										},
+									},
+									&types.Attribute{
+										Name: "from_port",
+										Value: &types.LiteralValue{
+											Value:     80,
+											ValueType: "number",
+										},
+									},
+									&types.Attribute{
+										Name: "to_port",
+										Value: &types.LiteralValue{
+											Value:     80,
+											ValueType: "number",
+										},
+									},
+									&types.Attribute{
+										Name: "protocol",
+										Value: &types.LiteralValue{
+											Value:     "tcp",
+											ValueType: "string",
+										},
+									},
+									&types.Attribute{
+										Name: "cidr_blocks",
+										Value: &types.ReferenceExpr{
+											Parts: []string{"[\"0", "0", "0", "0/0\"]"},
+										},
+									},
+								},
+							},
+							&types.Block{
+								Type:   "dynamic",
+								Labels: []string{"egress"},
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "for_each",
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.LiteralValue{
+													Value:     "",
+													ValueType: "null",
+												},
+												&types.LiteralValue{
+													Value:     "one",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "two",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "three",
+													ValueType: "string",
+												},
+												&types.LiteralValue{
+													Value:     "",
+													ValueType: "null",
+												},
+											},
+										},
+									},
+									&types.Block{
+										Type: "content",
+										Children: []types.Body{
+											&types.Attribute{
+												Name: "description",
+												Value: &types.TemplateExpr{
+													Parts: []types.Expression{
+														&types.LiteralValue{
+															Value:     "\"Dynamic ${egress.value}\"",
+															ValueType: "string",
+														},
+													},
+												},
+											},
+											&types.Attribute{
+												Name: "from_port",
+												Value: &types.LiteralValue{
+													Value:     0,
+													ValueType: "number",
+												},
+											},
+											&types.Attribute{
+												Name: "to_port",
+												Value: &types.LiteralValue{
+													Value:     0,
+													ValueType: "number",
+												},
+											},
+											&types.Attribute{
+												Name: "protocol",
+												Value: &types.LiteralValue{
+													Value:     "-1",
+													ValueType: "string",
+												},
+											},
+											&types.Attribute{
+												Name: "cidr_blocks",
+												Value: &types.ReferenceExpr{
+													Parts: []string{"[\"0", "0", "0", "0/0\"]"},
+												},
+											},
+										},
+									},
+								},
+							},
+							&types.Block{
+								Type: "lifecycle",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "create_before_destroy",
+										Value: &types.LiteralValue{
+											Value:     true,
+											ValueType: "bool",
+										},
+									},
+									&types.Block{
+										Type: "precondition",
+										Children: []types.Body{
+											&types.Attribute{
+												Name: "condition",
+												Value: &types.ReferenceExpr{
+													Parts: []string{"length(var", "allowed_cidrs) > 0"},
+												},
+											},
+											&types.Attribute{
+												Name: "error_message",
+												Value: &types.LiteralValue{
+													Value:     "At least one CIDR block must be allowed.",
+													ValueType: "string",
+												},
+											},
+										},
+									},
+									&types.Block{
+										Type: "postcondition",
+										Children: []types.Body{
+											&types.Attribute{
+												Name: "condition",
+												Value: &types.ReferenceExpr{
+													Parts: []string{"self", "name != \"\""},
+												},
+											},
+											&types.Attribute{
+												Name: "error_message",
+												Value: &types.LiteralValue{
+													Value:     "Name cannot be empty.",
+													ValueType: "string",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					&types.Block{
+						Type:         "locals",
+						BlockComment: "// Unusual function calls",
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "unusual_functions",
+								Value: &types.ObjectExpr{
+									Items: []types.ObjectItem{
+										{
+											Key: &types.ReferenceExpr{
+												Parts: []string{"nested"},
+											},
+											Value: &types.FunctionCallExpr{
+												Name: "merge",
+												Args: []types.Expression{
+													&types.ObjectExpr{
+														Items: []types.ObjectItem{
+															{
+																Key: &types.ReferenceExpr{
+																	Parts: []string{"a"},
+																},
+																Value: &types.LiteralValue{
+																	Value:     "value",
+																	ValueType: "string",
+																},
+															},
+														},
+													},
+													&types.ObjectExpr{
+														Items: []types.ObjectItem{
+															{
+																Key: &types.ReferenceExpr{
+																	Parts: []string{"b"},
+																},
+																Value: &types.FunctionCallExpr{
+																	Name: "lookup",
+																	Args: []types.Expression{
+																		&types.ObjectExpr{
+																			Items: []types.ObjectItem{
+																				{
+																					Key: &types.ReferenceExpr{
+																						Parts: []string{"x"},
+																					},
+																					Value: &types.LiteralValue{
+																						Value:     "x-value",
+																						ValueType: "string",
+																					},
+																				},
+																				{
+																					Key: &types.ReferenceExpr{
+																						Parts: []string{"y"},
+																					},
+																					Value: &types.LiteralValue{
+																						Value:     "y-value",
+																						ValueType: "string",
+																					},
+																				},
+																			},
+																		},
+																		&types.LiteralValue{
+																			Value:     "z",
+																			ValueType: "string",
+																		},
+																		&types.LiteralValue{
+																			Value:     "default",
+																			ValueType: "string",
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+										{
+											Key: &types.ReferenceExpr{
+												Parts: []string{"chained"},
+											},
+											Value: &types.FunctionCallExpr{
+												Name: "join",
+												Args: []types.Expression{
+													&types.LiteralValue{
+														Value:     ",",
+														ValueType: "string",
+													},
+													&types.FunctionCallExpr{
+														Name: "concat",
+														Args: []types.Expression{
+															&types.FunctionCallExpr{
+																Name: "split",
+																Args: []types.Expression{
+																	&types.LiteralValue{
+																		Value:     ",",
+																		ValueType: "string",
+																	},
+																	&types.LiteralValue{
+																		Value:     "a,b,c",
+																		ValueType: "string",
+																	},
+																},
+															},
+															&types.ArrayExpr{
+																Items: []types.Expression{
+																	&types.LiteralValue{
+																		Value:     "",
+																		ValueType: "null",
+																	},
+																	&types.LiteralValue{
+																		Value:     "d",
+																		ValueType: "string",
+																	},
+																	&types.LiteralValue{
+																		Value:     "e",
+																		ValueType: "string",
+																	},
+																	&types.LiteralValue{
+																		Value:     "f",
+																		ValueType: "string",
+																	},
+																	&types.LiteralValue{
+																		Value:     "",
+																		ValueType: "null",
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+										{
+											Key: &types.ReferenceExpr{
+												Parts: []string{"complex"},
+											},
+											Value: &types.FunctionCallExpr{
+												Name: "formatlist",
+												Args: []types.Expression{
+													&types.LiteralValue{
+														Value:     "%s = %s",
+														ValueType: "string",
+													},
+													&types.FunctionCallExpr{
+														Name: "keys",
+														Args: []types.Expression{
+															&types.ObjectExpr{
+																Items: []types.ObjectItem{
+																	{
+																		Key: &types.ReferenceExpr{
+																			Parts: []string{"key1"},
+																		},
+																		Value: &types.LiteralValue{
+																			Value:     "value1",
+																			ValueType: "string",
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{
+																			Parts: []string{"key2"},
+																		},
+																		Value: &types.LiteralValue{
+																			Value:     "value2",
+																			ValueType: "string",
+																		},
+																	},
+																},
+															},
+														},
+													},
+													&types.FunctionCallExpr{
+														Name: "values",
+														Args: []types.Expression{
+															&types.ObjectExpr{
+																Items: []types.ObjectItem{
+																	{
+																		Key: &types.ReferenceExpr{
+																			Parts: []string{"key1"},
+																		},
+																		Value: &types.LiteralValue{
+																			Value:     "value1",
+																			ValueType: "string",
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{
+																			Parts: []string{"key2"},
+																		},
+																		Value: &types.LiteralValue{
+																			Value:     "value2",
+																			ValueType: "string",
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					&types.Block{
+						Type:         "locals",
+						BlockComment: "// Comments in unusual places",
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "value1",
+								Value: &types.LiteralValue{
+									Value:     "test",
+									ValueType: "string",
+								},
+								InlineComment: "# end of line comment",
+							},
+							&types.Attribute{
+								Name: "value2",
+								Value: &types.LiteralValue{
+									Value:     "test2",
+									ValueType: "string",
+								},
+								BlockComment: "# end of line comment",
+							},
+						},
+					},
+					&types.Block{
+						Type:         "locals",
+						BlockComment: "// Unusual heredoc",
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "unusual_heredoc",
+								Value: &types.LiteralValue{
+									Value:     " and '\nIt includes backslashes: \\\\ and \\n and \\t\nIt includes unicode: こんにちは世界\nUNUSUAL\n\n  indented_heredoc = <<-INDENTED\n    This is an indented heredoc.\n    The leading whitespace will be trimmed.\n      This line has extra indentation.\n    Back to normal indentation.\n  INDENTED\n}\n\n// Unusual for expressions\nlocals {\n  unusual_for = [\n    for i, v in [",
+									ValueType: "string",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
