@@ -59,19 +59,19 @@ func createComplexModuleExpected() types.Body {
 									Key: &types.ReferenceExpr{Parts: []string{"enable_dns"}},
 									Value: &types.ConditionalExpr{
 										Condition: &types.BinaryExpr{
-											Left: &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+											Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
 											Operator: "==",
-											Right: &types.LiteralValue{Value: "prod", ValueType: "string"},
+											Right:    &types.LiteralValue{Value: "prod", ValueType: "string"},
 										},
 										TrueExpr: &types.LiteralValue{Value: true, ValueType: "bool"},
 										FalseExpr: &types.ParenExpr{
 											Expression: &types.ConditionalExpr{
 												Condition: &types.BinaryExpr{
-													Left: &types.ReferenceExpr{Parts: []string{"var", "enable_dns"}},
+													Left:     &types.ReferenceExpr{Parts: []string{"var", "enable_dns"}},
 													Operator: "!=",
-													Right: &types.LiteralValue{Value: nil, ValueType: "null"},
+													Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
 												},
-												TrueExpr: &types.ReferenceExpr{Parts: []string{"var", "enable_dns"}},
+												TrueExpr:  &types.ReferenceExpr{Parts: []string{"var", "enable_dns"}},
 												FalseExpr: &types.LiteralValue{Value: false, ValueType: "bool"},
 											},
 										},
@@ -96,11 +96,11 @@ func createComplexModuleExpected() types.Body {
 														},
 													},
 													{
-														Key: &types.ReferenceExpr{Parts: []string{"Environment"}},
+														Key:   &types.ReferenceExpr{Parts: []string{"Environment"}},
 														Value: &types.ReferenceExpr{Parts: []string{"var", "environment"}},
 													},
 													{
-														Key: &types.ReferenceExpr{Parts: []string{"ManagedBy"}},
+														Key:   &types.ReferenceExpr{Parts: []string{"ManagedBy"}},
 														Value: &types.LiteralValue{Value: "terraform", ValueType: "string"},
 													},
 												},
@@ -146,14 +146,14 @@ func createComplexModuleExpected() types.Body {
 						Name:         "subnet_configs",
 						BlockComment: "// Nested for expressions with conditional",
 						Value: &types.ForExpr{
-							KeyVar:     "zone_key",
-							ValueVar:   "zone",
-							Collection: &types.ReferenceExpr{Parts: []string{"var", "availability_zones"}},
+							KeyVar:      "zone_key",
+							ValueVar:    "zone",
+							Collection:  &types.ReferenceExpr{Parts: []string{"var", "availability_zones"}},
 							ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"zone_key"}},
 							ThenValueExpr: &types.ForExpr{
-								KeyVar:     "subnet_key",
-								ValueVar:   "subnet",
-								Collection: &types.ReferenceExpr{Parts: []string{"var", "subnet_types"}},
+								KeyVar:      "subnet_key",
+								ValueVar:    "subnet",
+								Collection:  &types.ReferenceExpr{Parts: []string{"var", "subnet_types"}},
 								ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"subnet_key"}},
 								ThenValueExpr: &types.ObjectExpr{
 									Items: []types.ObjectItem{
@@ -761,7 +761,7 @@ func createComplexResourceExpected() types.Body {
 								},
 							},
 							&types.Attribute{
-								Name:  "ignore_changes",
+								Name: "ignore_changes",
 								Value: &types.ArrayExpr{
 									Items: []types.Expression{
 										&types.RelativeTraversalExpr{
@@ -825,7 +825,7 @@ func createComplexLocalsExpected() types.Body {
 										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}}},
 									},
 									{
-										Key:   &types.ReferenceExpr{Parts: []string{"nat_gw"}},
+										Key: &types.ReferenceExpr{Parts: []string{"nat_gw"}},
 										Value: &types.ConditionalExpr{
 											Condition: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}}},
 											TrueExpr:  &types.LiteralValue{Value: true, ValueType: "bool"},
@@ -836,16 +836,16 @@ func createComplexLocalsExpected() types.Body {
 										Key: &types.ReferenceExpr{Parts: []string{"depends_on"}},
 										Value: &types.ConditionalExpr{
 											Condition: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}}},
-											TrueExpr: &types.ArrayExpr{Items: []types.Expression{}},
+											TrueExpr:  &types.ArrayExpr{Items: []types.Expression{}},
 											FalseExpr: &types.ForExpr{
 												ValueVar:   "s",
 												Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
 												ThenValueExpr: &types.RelativeTraversalExpr{
-													Source: &types.ReferenceExpr{Parts: []string{"s"}},
+													Source:    &types.ReferenceExpr{Parts: []string{"s"}},
 													Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}},
 												},
 												Condition: &types.RelativeTraversalExpr{
-													Source: &types.ReferenceExpr{Parts: []string{"s"}},
+													Source:    &types.ReferenceExpr{Parts: []string{"s"}},
 													Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}},
 												},
 											},
@@ -900,7 +900,7 @@ func createComplexLocalsExpected() types.Body {
 								Left: &types.BinaryExpr{
 									Left: &types.BinaryExpr{
 										Left: &types.RelativeTraversalExpr{
-											Source: &types.ReferenceExpr{Parts: []string{"server"}},
+											Source:    &types.ReferenceExpr{Parts: []string{"server"}},
 											Traversal: []types.TraversalElem{{Type: "attr", Name: "environment"}},
 										},
 										Operator: "==",
@@ -912,7 +912,7 @@ func createComplexLocalsExpected() types.Body {
 										Args: []types.Expression{
 											&types.ReferenceExpr{Parts: []string{"var", "allowed_types"}},
 											&types.RelativeTraversalExpr{
-												Source: &types.ReferenceExpr{Parts: []string{"server"}},
+												Source:    &types.ReferenceExpr{Parts: []string{"server"}},
 												Traversal: []types.TraversalElem{{Type: "attr", Name: "type"}},
 											},
 										},
@@ -926,7 +926,7 @@ func createComplexLocalsExpected() types.Body {
 										Args: []types.Expression{
 											&types.ReferenceExpr{Parts: []string{"var", "excluded_ids"}},
 											&types.RelativeTraversalExpr{
-												Source: &types.ReferenceExpr{Parts: []string{"server"}},
+												Source:    &types.ReferenceExpr{Parts: []string{"server"}},
 												Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}},
 											},
 										},
@@ -1098,7 +1098,7 @@ func createComplexLocalsExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name:  "timeout_seconds",
+						Name: "timeout_seconds",
 						Value: &types.ConditionalExpr{
 							Condition: &types.BinaryExpr{
 								Left:     &types.ReferenceExpr{Parts: []string{"var", "custom_timeout"}},
@@ -1130,7 +1130,7 @@ func createComplexLocalsExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name:  "schema",
+						Name: "schema",
 						Value: &types.ObjectExpr{
 							Items: []types.ObjectItem{
 								{
@@ -1450,12 +1450,30 @@ func createComplexProviderExpected() types.Body {
 						Type: "assume_role",
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "role_arn",
-								Value: &types.ConditionalExpr{},
+								Name: "role_arn",
+								Value: &types.ConditionalExpr{
+									Condition: &types.BinaryExpr{
+										Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+										Operator: "==",
+										Right:    &types.LiteralValue{Value: "prod", ValueType: "string"},
+									},
+									TrueExpr:  &types.ReferenceExpr{Parts: []string{"var", "prod_role_arn"}},
+									FalseExpr: &types.ReferenceExpr{Parts: []string{"var", "non_prod_role_arn"}},
+								},
 							},
 							&types.Attribute{
-								Name:  "session_name",
-								Value: &types.TemplateExpr{},
+								Name: "session_name",
+								Value: &types.TemplateExpr{
+									Parts: []types.Expression{
+										&types.LiteralValue{Value: "terraform-", ValueType: "string"},
+										&types.ReferenceExpr{Parts: []string{"var", "environment"}},
+										&types.LiteralValue{Value: "-", ValueType: "string"},
+										&types.FunctionCallExpr{
+											Name: "formatdate",
+											Args: []types.Expression{&types.LiteralValue{Value: "YYYYMMDDhhmmss", ValueType: "string"}, &types.FunctionCallExpr{Name: "timestamp"}},
+										},
+									},
+								},
 							},
 							&types.Attribute{
 								Name:  "external_id",
@@ -1467,23 +1485,143 @@ func createComplexProviderExpected() types.Body {
 						Type: "default_tags",
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "tags",
-								Value: &types.FunctionCallExpr{Name: "merge"},
+								Name: "tags",
+								Value: &types.FunctionCallExpr{
+									Name: "merge",
+									Args: []types.Expression{
+										&types.ReferenceExpr{Parts: []string{"var", "common_tags"}},
+										&types.ObjectExpr{
+											Items: []types.ObjectItem{
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"Environment"}},
+													Value: &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"ManagedBy"}},
+													Value: &types.LiteralValue{Value: "Terraform", ValueType: "string"},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"Project"}},
+													Value: &types.ReferenceExpr{Parts: []string{"var", "project_name"}},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"Owner"}},
+													Value: &types.ReferenceExpr{Parts: []string{"var", "owner"}},
+												},
+												{
+													Key: &types.ReferenceExpr{Parts: []string{"CreatedAt"}},
+													Value: &types.FunctionCallExpr{
+														Name: "formatdate",
+														Args: []types.Expression{
+															&types.LiteralValue{Value: "YYYY-MM-DD", ValueType: "string"},
+															&types.FunctionCallExpr{Name: "timestamp"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
-					&types.DynamicBlock{
-						ForEach:  &types.ConditionalExpr{},
-						Iterator: "endpoints",
-						Labels:   []string{"endpoints"},
-						Content: []types.Body{
-							&types.Attribute{Name: "apigateway"},
-							&types.Attribute{Name: "cloudformation"},
-							&types.Attribute{Name: "cloudwatch"},
-							&types.Attribute{Name: "dynamodb"},
-							&types.Attribute{Name: "ec2"},
-							&types.Attribute{Name: "s3"},
-							&types.Attribute{Name: "sts"},
+					&types.Block{
+						Labels: []string{"endpoints"},
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "for_each",
+								Value: &types.ConditionalExpr{
+									Condition: &types.BinaryExpr{
+										Left:     &types.ReferenceExpr{Parts: []string{"var", "custom_endpoints"}},
+										Operator: "!=",
+										Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
+									},
+									TrueExpr:  &types.ReferenceExpr{Parts: []string{"var", "custom_endpoints"}},
+									FalseExpr: &types.ObjectExpr{},
+								},
+							},
+							&types.Block{
+								Type: "content",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "apigateway",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "apigateway", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "cloudformation",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "cloudformation", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "cloudwatch",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "cloudwatch", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "dynamodb",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "dynamodb", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "ec2",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "ec2", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "s3",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "s3", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "sts",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"endpoints", "value"}},
+												&types.LiteralValue{Value: "sts", ValueType: "string"},
+												&types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1507,42 +1645,48 @@ func createComplexTerraformConfigExpected() types.Body {
 					&types.Block{
 						Type: "required_providers",
 						Children: []types.Body{
-							&types.Block{
-								Type: "aws",
-								Children: []types.Body{
-									&types.Attribute{
-										Name:  "source",
-										Value: &types.LiteralValue{Value: "hashicorp/aws", ValueType: "string"},
-									},
-									&types.Attribute{
-										Name:  "version",
-										Value: &types.LiteralValue{Value: ">= 4.0.0, < 5.0.0", ValueType: "string"},
-									},
-								},
-							},
-							&types.Block{
-								Type: "random",
-								Children: []types.Body{
-									&types.Attribute{
-										Name:  "source",
-										Value: &types.LiteralValue{Value: "hashicorp/random", ValueType: "string"},
-									},
-									&types.Attribute{
-										Name:  "version",
-										Value: &types.LiteralValue{Value: "~> 3.1", ValueType: "string"},
+							&types.Attribute{
+								Name: "aws",
+								Value: &types.ObjectExpr{
+									Items: []types.ObjectItem{
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"source"}},
+											Value: &types.LiteralValue{Value: "hashicorp/aws", ValueType: "string"},
+										},
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"version"}},
+											Value: &types.LiteralValue{Value: ">= 4.0.0, < 5.0.0", ValueType: "string"},
+										},
 									},
 								},
 							},
-							&types.Block{
-								Type: "null",
-								Children: []types.Body{
-									&types.Attribute{
-										Name:  "source",
-										Value: &types.LiteralValue{Value: "hashicorp/null", ValueType: "string"},
+							&types.Attribute{
+								Name: "random",
+								Value: &types.ObjectExpr{
+									Items: []types.ObjectItem{
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"source"}},
+											Value: &types.LiteralValue{Value: "hashicorp/random", ValueType: "string"},
+										},
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"version"}},
+											Value: &types.LiteralValue{Value: "~> 3.1", ValueType: "string"},
+										},
 									},
-									&types.Attribute{
-										Name:  "version",
-										Value: &types.LiteralValue{Value: "~> 3.1", ValueType: "string"},
+								},
+							},
+							&types.Attribute{
+								Name: "null",
+								Value: &types.ObjectExpr{
+									Items: []types.ObjectItem{
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"source"}},
+											Value: &types.LiteralValue{Value: "hashicorp/null", ValueType: "string"},
+										},
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"version"}},
+											Value: &types.LiteralValue{Value: "~> 3.1", ValueType: "string"},
+										},
 									},
 								},
 							},
@@ -1553,8 +1697,15 @@ func createComplexTerraformConfigExpected() types.Body {
 						Labels: []string{"s3"},
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "bucket",
-								Value: &types.TemplateExpr{},
+								Name: "bucket",
+								Value: &types.TemplateExpr{
+									Parts: []types.Expression{
+										&types.LiteralValue{Value: "terraform-state-", ValueType: "string"},
+										&types.ReferenceExpr{Parts: []string{"var", "environment"}},
+										&types.LiteralValue{Value: "-", ValueType: "string"},
+										&types.ReferenceExpr{Parts: []string{"var", "account_id"}},
+									},
+								},
 							},
 							&types.Attribute{
 								Name:  "key",
@@ -1583,13 +1734,15 @@ func createComplexTerraformConfigExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name:  "experiments",
-						Value: &types.ArrayExpr{},
+						Name: "experiments",
+						Value: &types.ArrayExpr{
+							Items: []types.Expression{
+								&types.ReferenceExpr{Parts: []string{"module_variable_optional_attrs"}},
+							},
+						},
 					},
 				},
 			},
 		},
 	}
 }
-
-// Note: createModuleExpected and createEdgeCasesExpected are already defined in test_helpers.go
