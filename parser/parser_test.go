@@ -26,23 +26,56 @@ func TestParser(t *testing.T) {
 			Description: "Simple Terraform file with basic constructs",
 			Expected:    createSimpleTerraformExpected(),
 		},
+		// Note: The original complex_terraform_test.tf file has been split into smaller files
+		// in the complex_terraform_split directory
+		// New test cases for split complex terraform files
 		{
-			Name:        "Complex Terraform",
-			FilePath:    "test_files/complex_terraform_test.tf",
-			Description: "Complex Terraform with nested expressions, conditionals, and for loops",
-			Expected:    createComplexTerraformExpected(),
+			Name:        "Complex Module",
+			FilePath:    "test_files/complex_terraform_split/01_complex_module.tf",
+			Description: "Complex module with nested expressions, conditionals, and for loops",
+			Expected:    createComplexModuleExpected(),
 		},
 		{
-			Name:        "Module Structure",
-			FilePath:    "test_files/modules_test/main.tf",
-			Description: "Module structure with nested modules",
-			Expected:    createModuleExpected(),
+			Name:        "Complex Resource",
+			FilePath:    "test_files/complex_terraform_split/02_complex_resource.tf",
+			Description: "Resource with complex dynamic blocks and for_each",
+			Expected:    createComplexResourceExpected(),
 		},
 		{
-			Name:        "Edge Cases",
-			FilePath:    "test_files/edge_cases_test.tf",
-			Description: "Edge cases and unusual syntax patterns",
-			Expected:    createEdgeCasesExpected(),
+			Name:        "Complex Locals",
+			FilePath:    "test_files/complex_terraform_split/03_complex_locals.tf",
+			Description: "Complex locals with nested expressions",
+			Expected:    createComplexLocalsExpected(),
+		},
+		{
+			Name:        "Complex Data Source",
+			FilePath:    "test_files/complex_terraform_split/04_complex_data_source.tf",
+			Description: "Data source with complex expressions",
+			Expected:    createComplexDataSourceExpected(),
+		},
+		{
+			Name:        "Complex Variable",
+			FilePath:    "test_files/complex_terraform_split/05_complex_variable.tf",
+			Description: "Variable with complex type constraints and validations",
+			Expected:    createComplexVariableExpected(),
+		},
+		{
+			Name:        "Complex Output",
+			FilePath:    "test_files/complex_terraform_split/06_complex_output.tf",
+			Description: "Output with complex expressions",
+			Expected:    createComplexOutputExpected(),
+		},
+		{
+			Name:        "Complex Provider",
+			FilePath:    "test_files/complex_terraform_split/07_complex_provider.tf",
+			Description: "Provider configuration with complex expressions",
+			Expected:    createComplexProviderExpected(),
+		},
+		{
+			Name:        "Complex Terraform Config",
+			FilePath:    "test_files/complex_terraform_split/08_complex_terraform_config.tf",
+			Description: "Terraform configuration with complex expressions",
+			Expected:    createComplexTerraformConfigExpected(),
 		},
 	}
 
