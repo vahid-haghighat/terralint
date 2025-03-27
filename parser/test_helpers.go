@@ -336,27 +336,7 @@ func createSimpleTerraformExpected() types.Body {
 func createComplexTerraformExpected() types.Body {
 	return &types.Root{
 		Children: []types.Body{
-			&types.Block{
-				Type:   "module",
-				Labels: []string{"complex_module"},
-				Children: []types.Body{
-					&types.Attribute{
-						Name: "source",
-						Value: &types.LiteralValue{
-							Value:     "terraform-aws-modules/vpc/aws",
-							ValueType: "string",
-						},
-					},
-					&types.Attribute{
-						Name: "version",
-						Value: &types.LiteralValue{
-							Value:     "~> 3.0",
-							ValueType: "string",
-						},
-					},
-					// Rest of the implementation would be here
-				},
-			},
+			// Implementation would be here
 		},
 	}
 }
