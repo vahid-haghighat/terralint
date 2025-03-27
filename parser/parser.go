@@ -507,7 +507,7 @@ func parseFormatDirective(node *sitter.Node, content []byte) *types.FormatDirect
 }
 
 // parseBlock converts a tree-sitter block node to our Block type
-func parseBlock(node *sitter.Node, content []byte) (*types.Block, error) {
+func parseBlock(node *sitter.Node, content []byte) (types.Body, error) {
 	// Get range information
 	nodeRange := sitter.Range{
 		StartPoint: node.StartPoint(),
@@ -599,6 +599,13 @@ func parseBlock(node *sitter.Node, content []byte) (*types.Block, error) {
 		blockTypeNode := cursor.CurrentNode()
 		if blockTypeNode.Type() == "identifier" {
 			block.Type = string(content[blockTypeNode.StartByte():blockTypeNode.EndByte()])
+
+			// Check if this is a dynamic block
+			if block.Type == "dynamic" {
+				// This is a dynamic block, parse it differently
+				cursor.GoToParent() // Reset cursor position
+				return parseDynamicBlock(node, content)
+			}
 		} else {
 			return nil, fmt.Errorf("block at line %d doesn't start with an identifier", node.StartPoint().Row+1)
 		}
@@ -709,18 +716,9 @@ func parseBlock(node *sitter.Node, content []byte) (*types.Block, error) {
 
 // parseDynamicBlock handles the parsing of dynamic blocks
 func parseDynamicBlock(node *sitter.Node, content []byte) (*types.DynamicBlock, error) {
-	// Get the label (type of the dynamic block)
-	var labels []string
-	labelsNode := findChildByFieldName(node, "labels")
-	if labelsNode != nil && labelsNode.NamedChildCount() > 0 {
-		labelNode := labelsNode.NamedChild(0)
-		label := string(content[labelNode.StartByte():labelNode.EndByte()])
-		// Remove quotes if string
-		if len(label) >= 2 && label[0] == '"' && label[len(label)-1] == '"' {
-			label = label[1 : len(label)-1]
-		}
-		labels = append(labels, label)
-	}
+	// Debug information
+	debugPrint("parseDynamicBlock - line: %d, text: %q",
+		node.StartPoint().Row+1, truncateString(string(content[node.StartByte():node.EndByte()]), 50))
 
 	// Get range information
 	nodeRange := sitter.Range{
@@ -730,85 +728,154 @@ func parseDynamicBlock(node *sitter.Node, content []byte) (*types.DynamicBlock, 
 		EndByte:    node.EndByte(),
 	}
 
-	// Parse the body to find forEach and content
-	bodyNode := findChildByFieldName(node, "body")
-	if bodyNode == nil {
-		return nil, fmt.Errorf("dynamic block without body")
-	}
-
-	// Create the dynamic block
+	// Initialize the dynamic block
 	dynamicBlock := &types.DynamicBlock{
-		Labels:   labels,
+		Labels:   []string{},
 		Range:    nodeRange,
 		Content:  []types.Body{},
 		Iterator: "", // Default empty, will be set if found
 	}
 
-	// Find comments associated with this block
+	// Extract block and inline comments
 	blockComment, inlineComment := findAssociatedComments(node, content)
 	dynamicBlock.BlockComment = blockComment
 	dynamicBlock.InlineComment = inlineComment
 
-	// Parse attributes in the dynamic block
-	cursor := sitter.NewTreeCursor(bodyNode)
+	// We'll find the label (block type) and body manually by traversing children
+	var bodyNode *sitter.Node
+	var labelsFound bool
+
+	cursor := sitter.NewTreeCursor(node)
 	defer cursor.Close()
 
+	// Go through first level children to find label and block_body
 	if cursor.GoToFirstChild() {
-		for {
+		// Skip the "dynamic" keyword
+		if !cursor.GoToNextSibling() {
+			return nil, fmt.Errorf("dynamic block missing content after 'dynamic' keyword")
+		}
+
+		// Next should be the label (e.g., "ingress")
+		labelNode := cursor.CurrentNode()
+		if labelNode.Type() == "string_lit" {
+			// Extract the label name and remove quotes
+			labelText := string(content[labelNode.StartByte():labelNode.EndByte()])
+			if len(labelText) >= 2 && (labelText[0] == '"' || labelText[0] == '\'') &&
+				(labelText[len(labelText)-1] == '"' || labelText[len(labelText)-1] == '\'') {
+				labelText = labelText[1 : len(labelText)-1]
+			}
+			dynamicBlock.Labels = append(dynamicBlock.Labels, labelText)
+			labelsFound = true
+		}
+
+		// Continue to find the block body
+		for cursor.GoToNextSibling() {
 			childNode := cursor.CurrentNode()
+			if childNode.Type() == "block_body" || childNode.Type() == "body" {
+				bodyNode = childNode
+				break
+			}
+		}
+	}
+
+	if !labelsFound {
+		return nil, fmt.Errorf("dynamic block missing label")
+	}
+
+	if bodyNode == nil {
+		return nil, fmt.Errorf("dynamic block without body")
+	}
+
+	// Parse attributes in the dynamic block
+	bodyCursor := sitter.NewTreeCursor(bodyNode)
+	defer bodyCursor.Close()
+
+	if bodyCursor.GoToFirstChild() {
+		for {
+			childNode := bodyCursor.CurrentNode()
 
 			// Look for forEach attribute
 			if childNode.Type() == "attribute" {
-				attrName := findChildByFieldName(childNode, "name")
-				if attrName != nil && string(content[attrName.StartByte():attrName.EndByte()]) == "for_each" {
-					exprNode := findChildByFieldName(childNode, "expression")
-					if exprNode != nil {
-						expr, err := parseExpression(exprNode, content)
-						if err != nil {
-							return nil, err
-						}
-						dynamicBlock.ForEach = expr
-					}
-				} else if attrName != nil && string(content[attrName.StartByte():attrName.EndByte()]) == "iterator" {
-					// Parse iterator if present
-					exprNode := findChildByFieldName(childNode, "expression")
-					if exprNode != nil {
-						// Iterator should be a simple string literal
-						text := string(content[exprNode.StartByte():exprNode.EndByte()])
-						text = strings.Trim(text, "\"")
-						dynamicBlock.Iterator = text
-					}
+				// Find the attribute name
+				var attrName string
+				attrNameNode := findChildByFieldName(childNode, "name")
+				if attrNameNode != nil {
+					attrName = string(content[attrNameNode.StartByte():attrNameNode.EndByte()])
 				}
-			} else if childNode.Type() == "block" && findChildByFieldName(childNode, "type") != nil {
-				blockType := findChildByFieldName(childNode, "type")
-				if string(content[blockType.StartByte():blockType.EndByte()]) == "content" {
-					// Parse content block
-					contentBodyNode := findChildByFieldName(childNode, "body")
-					if contentBodyNode != nil {
-						contentCursor := sitter.NewTreeCursor(contentBodyNode)
-						if contentCursor.GoToFirstChild() {
-							for {
-								contentChildNode := contentCursor.CurrentNode()
-								contentChild, err := parseNode(contentChildNode, content)
-								if err != nil {
-									contentCursor.Close()
-									return nil, err
-								}
-								if contentChild != nil {
-									dynamicBlock.Content = append(dynamicBlock.Content, contentChild)
-								}
 
-								if !contentCursor.GoToNextSibling() {
-									break
+				// Get the expression node
+				exprNode := findChildByFieldName(childNode, "expression")
+
+				// Process based on attribute name
+				if attrName == "for_each" && exprNode != nil {
+					expr, err := parseExpression(exprNode, content)
+					if err != nil {
+						return nil, err
+					}
+					dynamicBlock.ForEach = expr
+					debugPrint("  Parsed for_each: %s", string(content[exprNode.StartByte():exprNode.EndByte()]))
+				} else if attrName == "iterator" && exprNode != nil {
+					// Parse iterator if present
+					text := string(content[exprNode.StartByte():exprNode.EndByte()])
+					// Remove quotes if present
+					if len(text) >= 2 && (text[0] == '"' || text[0] == '\'') &&
+						(text[len(text)-1] == '"' || text[len(text)-1] == '\'') {
+						text = text[1 : len(text)-1]
+					}
+					dynamicBlock.Iterator = text
+					debugPrint("  Parsed iterator: %s", text)
+				}
+			} else if childNode.Type() == "block" {
+				// Find if this is a "content" block
+				blockTypeNode := findChildByFieldName(childNode, "type")
+				if blockTypeNode != nil {
+					blockType := string(content[blockTypeNode.StartByte():blockTypeNode.EndByte()])
+					debugPrint("  Found block: %s", blockType)
+
+					if blockType == "content" {
+						// Parse content block
+						contentBodyNode := findChildByFieldName(childNode, "body")
+						if contentBodyNode != nil {
+							debugPrint("  Found content body")
+							contentCursor := sitter.NewTreeCursor(contentBodyNode)
+							if contentCursor.GoToFirstChild() {
+								for {
+									contentChildNode := contentCursor.CurrentNode()
+									// Skip comments and whitespace
+									if contentChildNode.Type() == "comment" || contentChildNode.Type() == "" {
+										if !contentCursor.GoToNextSibling() {
+											break
+										}
+										continue
+									}
+
+									debugPrint("  Content child: %s - %s",
+										contentChildNode.Type(),
+										string(content[contentChildNode.StartByte():contentChildNode.EndByte()]))
+
+									contentChild, err := parseNode(contentChildNode, content)
+									if err != nil {
+										contentCursor.Close()
+										return nil, err
+									}
+
+									if contentChild != nil {
+										dynamicBlock.Content = append(dynamicBlock.Content, contentChild)
+										debugPrint("  Added content child: %T", contentChild)
+									}
+
+									if !contentCursor.GoToNextSibling() {
+										break
+									}
 								}
 							}
+							contentCursor.Close()
 						}
-						contentCursor.Close()
 					}
 				}
 			}
 
-			if !cursor.GoToNextSibling() {
+			if !bodyCursor.GoToNextSibling() {
 				break
 			}
 		}
@@ -1998,18 +2065,19 @@ func parseObjectFromText(text string, exprRange sitter.Range) *types.ObjectExpr 
 		// Trim the key to remove trailing whitespace
 		keyText := strings.TrimSpace(text[keyStart:i])
 
-		if i >= len(text) || text[i] != '=' {
-			// Skip this line if there's no equals sign
-			for i < len(text) && text[i] != '\n' {
-				i++
-			}
-			continue
+		// Create a reference for the key
+		keyExpr := &types.ReferenceExpr{
+			Parts: []string{keyText},
+			ExprRange: sitter.Range{
+				StartPoint: exprRange.StartPoint,
+				EndPoint:   exprRange.EndPoint,
+				StartByte:  exprRange.StartByte,
+				EndByte:    exprRange.EndByte,
+			},
 		}
-		// fmt.Printf("Found key: %q\n", keyText)
-		i++ // Skip the equals sign
 
-		// Skip whitespace after equals sign
-		for i < len(text) && (text[i] == ' ' || text[i] == '\t') {
+		// Skip the equals sign and any following whitespace
+		for i < len(text) && (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r' || text[i] == '=') {
 			i++
 		}
 
@@ -2018,295 +2086,76 @@ func parseObjectFromText(text string, exprRange sitter.Range) *types.ObjectExpr 
 		}
 
 		// Find the value
-		var value string
-		var valueExpr types.Expression
-
-		// Create a reference expression for the key
-		keyExpr := &types.ReferenceExpr{
-			Parts:     []string{keyText},
-			ExprRange: exprRange,
-		}
-
-		// Handle different value types
-		if i < len(text) && text[i] == '"' {
-			// String literal
-			valueStart := i
-			i++ // Skip the opening quote
-
-			// Find the closing quote
-			for i < len(text) && text[i] != '"' {
-				if text[i] == '\\' && i+1 < len(text) {
-					i += 2 // Skip escaped character
-				} else {
-					i++
-				}
-			}
-
-			if i < len(text) {
-				i++ // Skip the closing quote
-				value = text[valueStart:i]
-
-				// Create a string literal
-				valueExpr = &types.LiteralValue{
-					Value:     value[1 : len(value)-1], // Remove quotes
-					ValueType: "string",
-					ExprRange: exprRange,
-				}
-			}
-		} else if i+3 < len(text) && text[i:i+4] == "true" {
-			// Boolean true
-			value = "true"
-			i += 4
-			valueExpr = &types.LiteralValue{
-				Value:     "true",
-				ValueType: "bool",
-				ExprRange: exprRange,
-			}
-		} else if i+4 < len(text) && text[i:i+5] == "false" {
-			// Boolean false
-			value = "false"
-			i += 5
-			valueExpr = &types.LiteralValue{
-				Value:     "false",
-				ValueType: "bool",
-				ExprRange: exprRange,
-			}
-		} else if i+3 < len(text) && text[i:i+4] == "null" {
-			// Null value
-			value = "null"
-			i += 4
-			valueExpr = &types.LiteralValue{
-				Value:     "null",
-				ValueType: "null",
-				ExprRange: exprRange,
-			}
-		} else if i < len(text) && text[i] >= '0' && text[i] <= '9' {
-			// Number literal
-			valueStart := i
-
-			// Find the end of the number
-			for i < len(text) && ((text[i] >= '0' && text[i] <= '9') || text[i] == '.') {
-				i++
-			}
-
-			value = text[valueStart:i]
-			valueExpr = &types.LiteralValue{
-				Value:     value,
-				ValueType: "number",
-				ExprRange: exprRange,
-			}
-		} else if i < len(text) && text[i] == '[' {
-			// Array/tuple literal
-			valueStart := i
-			i++ // Skip the opening bracket
+		valueStart := i
+		// But first check if this is a nested object or array
+		if text[i] == '{' {
+			// This is a nested object
 			braceLevel := 1
-
-			// Find the closing bracket
-			for i < len(text) && braceLevel > 0 {
-				if text[i] == '[' {
-					braceLevel++
-				} else if text[i] == ']' {
-					braceLevel--
-				} else if text[i] == '"' {
-					i++ // Skip the opening quote
-
-					// Skip the string content
-					for i < len(text) && text[i] != '"' {
-						if text[i] == '\\' && i+1 < len(text) {
-							i += 2 // Skip escaped character
-						} else {
-							i++
-						}
-					}
-				}
-
-				if i < len(text) {
-					i++
-				}
-			}
-
-			value = text[valueStart:i]
-
-			// Create a tuple expression
-			// Parse the array elements
-			arrayContent := value[1 : len(value)-1] // Remove brackets
-			elements := []types.Expression{}
-
-			// Split by commas, but handle nested structures
-			start := 0
-			var arrayBraceLevel int
-			var arrayBracketLevel int
-			var arrayQuoteOpen bool
-
-			for i := 0; i < len(arrayContent); i++ {
-				char := arrayContent[i]
-
-				if char == '"' && (i == 0 || arrayContent[i-1] != '\\') {
-					arrayQuoteOpen = !arrayQuoteOpen
-				} else if !arrayQuoteOpen {
-					if char == '{' {
-						arrayBraceLevel++
-					} else if char == '}' {
-						arrayBraceLevel--
-					} else if char == '[' {
-						arrayBracketLevel++
-					} else if char == ']' {
-						arrayBracketLevel--
-					} else if char == ',' && arrayBraceLevel == 0 && arrayBracketLevel == 0 {
-						// Found a comma at the top level, extract the element
-						element := strings.TrimSpace(arrayContent[start:i])
-						if element != "" {
-							elements = append(elements, createReferenceFromText(element, exprRange))
-						}
-						start = i + 1
-					}
-				}
-			}
-
-			// Add the last element
-			if start < len(arrayContent) {
-				element := strings.TrimSpace(arrayContent[start:])
-				if element != "" {
-					elements = append(elements, createReferenceFromText(element, exprRange))
-				}
-			}
-
-			valueExpr = &types.TupleExpr{
-				Expressions: elements,
-				ExprRange:   exprRange,
-			}
-		} else if i < len(text) && text[i] == '{' {
-			// Nested object literal
-			valueStart := i
-			i++ // Skip the opening brace
-			braceLevel := 1
-
-			// Find the closing brace
+			i++ // Skip opening brace
 			for i < len(text) && braceLevel > 0 {
 				if text[i] == '{' {
 					braceLevel++
 				} else if text[i] == '}' {
 					braceLevel--
-				} else if text[i] == '"' {
-					i++ // Skip the opening quote
-
-					// Skip the string content
-					for i < len(text) && text[i] != '"' {
-						if text[i] == '\\' && i+1 < len(text) {
-							i += 2 // Skip escaped character
-						} else {
-							i++
-						}
-					}
 				}
-
-				if i < len(text) {
-					i++
-				}
-			}
-
-			value = text[valueStart:i]
-
-			// Create a nested object expression
-			nestedObjText := value[1 : len(value)-1] // Remove braces
-			valueExpr = parseObjectFromText(nestedObjText, exprRange)
-		} else {
-			// Reference or other expression
-			valueStart := i
-
-			// Find the end of the value (newline or comma)
-			for i < len(text) && text[i] != '\n' && text[i] != ',' {
 				i++
 			}
-
-			value = strings.TrimSpace(text[valueStart:i])
-			valueExpr = createReferenceFromText(value, exprRange)
+		} else if text[i] == '[' {
+			// This is a nested array
+			bracketLevel := 1
+			i++ // Skip opening bracket
+			for i < len(text) && bracketLevel > 0 {
+				if text[i] == '[' {
+					bracketLevel++
+				} else if text[i] == ']' {
+					bracketLevel--
+				}
+				i++
+			}
+		} else {
+			// This is a simple value, find the end (comma or end of text)
+			for i < len(text) {
+				if text[i] == ',' || text[i] == '\n' || text[i] == '\r' {
+					break
+				}
+				i++
+			}
 		}
 
-		// Add the object item
+		// Get the value text
+		valueText := strings.TrimSpace(text[valueStart:i])
+
+		// Skip any trailing comma and whitespace
+		for i < len(text) && (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r' || text[i] == ',') {
+			i++
+		}
+
+		// Create a simple literal value for the value
+		valueExpr := &types.LiteralValue{
+			Value:     valueText,
+			ValueType: "string",
+			ExprRange: sitter.Range{
+				StartPoint: exprRange.StartPoint,
+				EndPoint:   exprRange.EndPoint,
+				StartByte:  exprRange.StartByte,
+				EndByte:    exprRange.EndByte,
+			},
+		}
+
+		// Create the object item and add it to the array
 		objExpr.Items = append(objExpr.Items, types.ObjectItem{
 			Key:   keyExpr,
 			Value: valueExpr,
 		})
-
-		// Skip to the next line
-		for i < len(text) && text[i] != '\n' {
-			i++
-		}
 	}
 
 	return objExpr
 }
+
+// Helper function to create a reference expression from text
 func createReferenceFromText(text string, exprRange sitter.Range) types.Expression {
-	// Trim any whitespace
-	text = strings.TrimSpace(text)
-
-	// Handle empty text
-	if text == "" {
-		return &types.LiteralValue{
-			Value:     "",
-			ValueType: "string",
-			ExprRange: exprRange,
-		}
-	}
-
-	// Handle string literals
-	if (strings.HasPrefix(text, "\"") && strings.HasSuffix(text, "\"")) ||
-		(strings.HasPrefix(text, "'") && strings.HasSuffix(text, "'")) {
-		// Remove the quotes
-		value := text[1 : len(text)-1]
-		return &types.LiteralValue{
-			Value:     value,
-			ValueType: "string",
-			ExprRange: exprRange,
-		}
-	}
-
-	// Handle boolean literals
-	if text == "true" || text == "false" {
-		return &types.LiteralValue{
-			Value:     text,
-			ValueType: "bool",
-			ExprRange: exprRange,
-		}
-	}
-
-	// Handle number literals
-	if _, err := strconv.ParseFloat(text, 64); err == nil {
-		return &types.LiteralValue{
-			Value:     text,
-			ValueType: "number",
-			ExprRange: exprRange,
-		}
-	}
-
-	// Handle null literal
-	if text == "null" {
-		return &types.LiteralValue{
-			Value:     "null",
-			ValueType: "null",
-			ExprRange: exprRange,
-		}
-	}
-
-	// Handle function calls
-	if strings.Contains(text, "(") && strings.Contains(text, ")") {
-		openParenIndex := strings.Index(text, "(")
-		if openParenIndex > 0 {
-			funcName := strings.TrimSpace(text[:openParenIndex])
-
-			// Create a function call expression
-			return &types.FunctionCallExpr{
-				Name:      funcName,
-				Args:      []types.Expression{}, // We can't easily parse the args from text
-				ExprRange: exprRange,
-			}
-		}
-	}
-
-	// Handle references with dots
-	if strings.Contains(text, ".") {
-		// This looks like a reference with dots
+	// If it contains dots, it's a reference
+	if strings.Contains(text, ".") && !strings.HasPrefix(text, "\"") {
 		parts := strings.Split(text, ".")
 		for i := range parts {
 			parts[i] = strings.TrimSpace(parts[i])
@@ -2317,36 +2166,30 @@ func createReferenceFromText(text string, exprRange sitter.Range) types.Expressi
 		}
 	}
 
-	// Handle array/tuple literals
-	if strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]") {
-		// This is an array/tuple literal
-		return &types.TupleExpr{
-			Expressions: []types.Expression{}, // We can't easily parse the elements from text
-			ExprRange:   exprRange,
-		}
-	}
+	// Check if it's a function call
+	if strings.Contains(text, "(") && strings.Contains(text, ")") {
+		fnNameEnd := strings.Index(text, "(")
+		fnName := strings.TrimSpace(text[:fnNameEnd])
 
-	// Handle object literals
-	if strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}") {
-		// This is an object literal
-		return &types.ObjectExpr{
-			Items:     []types.ObjectItem{}, // We can't easily parse the items from text
+		// Very simple function call parsing, just as a placeholder
+		return &types.FunctionCallExpr{
+			Name:      fnName,
+			Args:      []types.Expression{},
 			ExprRange: exprRange,
 		}
 	}
 
-	// Default to a reference to a single variable
-	return &types.ReferenceExpr{
-		Parts:     []string{text},
+	// Otherwise, it's a simple literal
+	return &types.LiteralValue{
+		Value:     text,
+		ValueType: "string",
 		ExprRange: exprRange,
 	}
 }
 
+// parseForExpr parses for expressions from a node
 func parseForExpr(node *sitter.Node, content []byte) (*types.ForExpr, error) {
-	// Get the full text for debugging
-	fullText := string(content[node.StartByte():node.EndByte()])
-
-	// Create a range for the expression
+	// Get range information
 	exprRange := sitter.Range{
 		StartPoint: node.StartPoint(),
 		EndPoint:   node.EndPoint(),
@@ -2354,264 +2197,187 @@ func parseForExpr(node *sitter.Node, content []byte) (*types.ForExpr, error) {
 		EndByte:    node.EndByte(),
 	}
 
-	// Create a for expression with default values
+	// Initialize with default values
 	forExpr := &types.ForExpr{
 		KeyVar:    "",
-		ValueVar:  "item", // Default value
+		ValueVar:  "",
 		ExprRange: exprRange,
 	}
 
-	// Special case for direct attribute values like f = [ for item in var.items: item * 2 ]
-	// These might be parsed as references instead of for expressions
-	if strings.Contains(fullText, "for") && strings.Contains(fullText, "in") && strings.Contains(fullText, ":") {
-		// This looks like a for expression in text form
-		// Extract the components using regex
+	// Parse variable declarations
+	// Try to find intro expression which contains the variables and collection
+	introNode := findChildByFieldName(node, "intro")
+	if introNode != nil {
+		// The intro contains stuff like "for k, v in list"
+		introText := string(content[introNode.StartByte():introNode.EndByte()])
 
-		// Extract the iterator variables and collection
-		forInMatch := regexp.MustCompile(`for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?):`)
-		forKeyValueMatch := regexp.MustCompile(`for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?):`)
+		// Extract variables and collection
+		parts := strings.Split(introText, "in")
+		if len(parts) >= 2 {
+			// Left side has variables
+			varPart := strings.TrimSpace(parts[0])
+			varPart = strings.TrimPrefix(varPart, "for")
+			varPart = strings.TrimSpace(varPart)
 
-		if forKeyValueMatch.MatchString(fullText) {
-			// This is a "for k, v in collection" pattern
-			matches := forKeyValueMatch.FindStringSubmatch(fullText)
-			if len(matches) >= 4 {
-				forExpr.KeyVar = strings.TrimSpace(matches[1])
-				forExpr.ValueVar = strings.TrimSpace(matches[2])
-
-				// Parse the collection
-				collText := strings.TrimSpace(matches[3])
-				forExpr.Collection = createReferenceFromText(collText, exprRange)
-			}
-		} else if forInMatch.MatchString(fullText) {
-			// This is a "for item in collection" pattern
-			matches := forInMatch.FindStringSubmatch(fullText)
-			if len(matches) >= 3 {
-				forExpr.ValueVar = strings.TrimSpace(matches[1])
-
-				// Parse the collection
-				collText := strings.TrimSpace(matches[2])
-				forExpr.Collection = createReferenceFromText(collText, exprRange)
-			}
-		}
-
-		// Extract the value expression
-		valueMatch := regexp.MustCompile(`:\s*(.+?)[\]\}]`).FindStringSubmatch(fullText)
-		if len(valueMatch) >= 2 {
-			valueText := strings.TrimSpace(valueMatch[1])
-
-			// Check if this is a key-value mapping (for object expressions)
-			if strings.Contains(valueText, "=>") {
-				parts := strings.Split(valueText, "=>")
-				if len(parts) >= 2 {
-					valueExprText := strings.TrimSpace(parts[0])
-					keyExprText := strings.TrimSpace(parts[1])
-
-					forExpr.ThenKeyExpr = createReferenceFromText(valueExprText, exprRange)
-					forExpr.ThenValueExpr = createReferenceFromText(keyExprText, exprRange)
+			// Check if we have one or two variables
+			if strings.Contains(varPart, ",") {
+				// Two variables: "for k, v"
+				vars := strings.Split(varPart, ",")
+				if len(vars) >= 2 {
+					forExpr.KeyVar = strings.TrimSpace(vars[0])
+					forExpr.ValueVar = strings.TrimSpace(vars[1])
 				}
 			} else {
-				// This is a simple value expression
-				forExpr.ThenKeyExpr = createReferenceFromText(valueText, exprRange)
-			}
-		}
-
-		// Return the for expression
-		return forExpr, nil
-	}
-
-	// Check if this is a for_expr with a single child
-	if node.NamedChildCount() == 1 {
-		// Get the actual for expression node (for_tuple_expr or for_object_expr)
-		forNode := node.NamedChild(0)
-
-		// Process based on the type of for expression
-		if forNode.Type() == "for_tuple_expr" || forNode.Type() == "for_object_expr" {
-			// Extract components from the for expression
-
-			// 1. Find the for_intro node which contains the variables and collection
-			var forIntroNode *sitter.Node
-			var valueNode *sitter.Node
-			var keyNode *sitter.Node
-
-			for i := 0; i < int(forNode.NamedChildCount()); i++ {
-				child := forNode.NamedChild(i)
-
-				if child.Type() == "for_intro" {
-					forIntroNode = child
-				} else if child.Type() == "expression" {
-					// In for_tuple_expr, there's only one expression (the value)
-					// In for_object_expr, there are two expressions (value and key)
-					if valueNode == nil {
-						valueNode = child
-					} else if keyNode == nil && forNode.Type() == "for_object_expr" {
-						keyNode = child
-					}
-				}
+				// One variable: "for v"
+				forExpr.ValueVar = varPart
 			}
 
-			// 2. Extract variables and collection from for_intro
-			if forIntroNode != nil {
-				// Parse the for_intro text to extract variables and collection
-				introText := string(content[forIntroNode.StartByte():forIntroNode.EndByte()])
-
-				// Remove the "for " prefix and the ":" suffix
-				introText = strings.TrimPrefix(introText, "for ")
-				introText = strings.TrimSuffix(introText, ":")
-
-				// Split by "in" to get variables and collection
-				parts := strings.Split(introText, " in ")
-				if len(parts) == 2 {
-					varPart := strings.TrimSpace(parts[0])
-					collPart := strings.TrimSpace(parts[1])
-
-					// Check if we have one or two variables
-					if strings.Contains(varPart, ",") {
-						// Two variables: "k, v"
-						varParts := strings.Split(varPart, ",")
-						if len(varParts) >= 2 {
-							forExpr.KeyVar = strings.TrimSpace(varParts[0])
-							forExpr.ValueVar = strings.TrimSpace(varParts[1])
-						}
-					} else {
-						// One variable: "item"
-						forExpr.ValueVar = varPart
-					}
-
-					// Parse the collection expression
-					forExpr.Collection = &types.ReferenceExpr{
-						Parts:     strings.Split(collPart, "."),
-						ExprRange: exprRange,
-					}
-				}
-			}
-
-			// 3. Extract the value expression
-			if valueNode != nil {
-				// Get the text of the value expression
-				valueText := string(content[valueNode.StartByte():valueNode.EndByte()])
-
-				// For tuple expressions, we need to handle expressions like "item * 2"
-				if forNode.Type() == "for_tuple_expr" {
-					// Try to parse the expression
-					valueExpr, err := parseExpression(valueNode, content)
-					if err == nil {
-						forExpr.ThenKeyExpr = valueExpr
-					} else {
-						// If parsing fails, create a reference expression
-						forExpr.ThenKeyExpr = &types.ReferenceExpr{
-							Parts:     []string{valueText},
-							ExprRange: exprRange,
-						}
-					}
-				} else {
-					// For object expressions, just parse normally
-					valueExpr, err := parseExpression(valueNode, content)
-					if err == nil {
-						forExpr.ThenKeyExpr = valueExpr
-					}
-				}
-			}
-
-			// 4. Extract the key expression (for object expressions)
-			if keyNode != nil {
-				keyExpr, err := parseExpression(keyNode, content)
-				if err == nil {
-					forExpr.ThenValueExpr = keyExpr
-				}
-			}
+			// Right side has collection
+			collPart := strings.TrimSpace(parts[1])
+			// For simplicity, we'll use a reference expression for the collection
+			forExpr.Collection = createReferenceFromText(collPart, exprRange)
 		}
 	}
 
-	// Set default values if we couldn't extract them
-	if forExpr.Collection == nil {
-		forExpr.Collection = &types.LiteralValue{
-			Value:     "collection",
-			ValueType: "string",
-			ExprRange: exprRange,
+	// Try to find condition node (if present)
+	condNode := findChildByFieldName(node, "condition")
+	if condNode != nil {
+		cond, err := parseExpression(condNode, content)
+		if err != nil {
+			return nil, err
 		}
+		forExpr.Condition = cond
 	}
 
-	if forExpr.ThenKeyExpr == nil {
-		forExpr.ThenKeyExpr = &types.LiteralValue{
-			Value:     "value",
-			ValueType: "string",
-			ExprRange: exprRange,
+	// Try to find the expression that produces values
+	valueNode := findChildByFieldName(node, "value_expr")
+	if valueNode == nil {
+		// Try alternative field names
+		valueNode = findChildByFieldName(node, "body")
+	}
+
+	if valueNode != nil {
+		valueExpr, err := parseExpression(valueNode, content)
+		if err != nil {
+			return nil, err
 		}
+		forExpr.ThenKeyExpr = valueExpr
+	}
+
+	// Check if there's a map output with key expression
+	keyNode := findChildByFieldName(node, "key_expr")
+	if keyNode != nil {
+		keyExpr, err := parseExpression(keyNode, content)
+		if err != nil {
+			return nil, err
+		}
+		// In a map output, what we thought was the key expr might actually be the value
+		forExpr.ThenValueExpr = forExpr.ThenKeyExpr
+		forExpr.ThenKeyExpr = keyExpr
 	}
 
 	return forExpr, nil
 }
 
+// parseSplatExpr parses splat expressions like resources[*].id
 func parseSplatExpr(node *sitter.Node, content []byte) (*types.SplatExpr, error) {
-	sourceNode := findChildByFieldName(node, "collection")
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
+	}
+
+	// Initialize splat expression
+	splatExpr := &types.SplatExpr{
+		ExprRange: exprRange,
+	}
+
+	// Try to find the source expression (the collection being splatted)
+	sourceNode := findChildByFieldName(node, "source")
 	if sourceNode == nil {
-		return nil, fmt.Errorf("splat expression missing source")
+		// Try to find it by position
+		if node.ChildCount() > 0 {
+			sourceNode = node.Child(0)
+		}
 	}
 
-	source, err := parseExpression(sourceNode, content)
-	if err != nil {
-		return nil, err
-	}
-
-	// Each expression (what's being accessed after the splat)
-	// For full splats this is often implicit
-	var each types.Expression
-	eachNode := findChildByFieldName(node, "each")
-	if eachNode != nil {
-		each, err = parseExpression(eachNode, content)
+	if sourceNode != nil {
+		source, err := parseExpression(sourceNode, content)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		// If no explicit each expression, use a simple reference
-		each = &types.ReferenceExpr{
-			Parts: []string{"*"},
-			ExprRange: sitter.Range{
-				StartPoint: node.EndPoint(),
-				EndPoint:   node.EndPoint(),
-				StartByte:  node.EndByte(),
-				EndByte:    node.EndByte(),
-			},
+		splatExpr.Source = source
+	}
+
+	// Try to find the "each" expression (what's applied to each element)
+	eachNode := findChildByFieldName(node, "each")
+	if eachNode == nil {
+		// If not found by field name, look for it after the splat operator
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if child.Type() == "*" && i+1 < int(node.ChildCount()) {
+				eachNode = node.Child(i + 1)
+				break
+			}
 		}
 	}
 
-	return &types.SplatExpr{
-		Source: source,
-		Each:   each,
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}, nil
+	if eachNode != nil {
+		each, err := parseExpression(eachNode, content)
+		if err != nil {
+			return nil, err
+		}
+		splatExpr.Each = each
+	}
+
+	return splatExpr, nil
 }
 
+// parseHeredocExpr parses heredoc expressions like <<-EOT
 func parseHeredocExpr(node *sitter.Node, content []byte) (*types.HeredocExpr, error) {
-	markerNode := findChildByFieldName(node, "marker")
-	if markerNode == nil {
-		return nil, fmt.Errorf("heredoc without marker")
+	// Get the full text
+	text := string(content[node.StartByte():node.EndByte()])
+
+	// Try to find the marker (e.g., EOT)
+	marker := ""
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "<<") {
+			marker = strings.TrimPrefix(line, "<<")
+			marker = strings.TrimPrefix(marker, "-")
+			marker = strings.TrimSpace(marker)
+			break
+		}
 	}
 
-	marker := string(content[markerNode.StartByte():markerNode.EndByte()])
+	// Check if it's an indented heredoc
+	isIndented := strings.Contains(text, "<<-")
 
-	// Check if indented heredoc (starts with <<-)
-	indent := false
-	if strings.HasPrefix(string(content[node.StartByte():node.StartByte()+3]), "<<-") {
-		indent = true
+	// Extract content (everything between marker lines)
+	heredocContent := text
+	startMarker := "<<" + marker
+	if isIndented {
+		startMarker = "<<-" + marker
+	}
+	endMarker := marker
+
+	// Very simplistic approach - just remove markers and keep the rest
+	if idx := strings.Index(heredocContent, startMarker); idx >= 0 {
+		heredocContent = heredocContent[idx+len(startMarker):]
+	}
+	if idx := strings.LastIndex(heredocContent, endMarker); idx >= 0 {
+		heredocContent = heredocContent[:idx]
 	}
 
-	// Get content
-	contentNode := findChildByFieldName(node, "content")
-	var contentText string
-	if contentNode != nil {
-		contentText = string(content[contentNode.StartByte():contentNode.EndByte()])
-	}
+	// Trim any leading/trailing newlines
+	heredocContent = strings.TrimSpace(heredocContent)
 
 	return &types.HeredocExpr{
 		Marker:   marker,
-		Content:  contentText,
-		Indented: indent,
+		Content:  heredocContent,
+		Indented: isIndented,
 		ExprRange: sitter.Range{
 			StartPoint: node.StartPoint(),
 			EndPoint:   node.EndPoint(),
@@ -2621,79 +2387,75 @@ func parseHeredocExpr(node *sitter.Node, content []byte) (*types.HeredocExpr, er
 	}, nil
 }
 
+// parseIndexExpr parses index access expressions like array[0]
 func parseIndexExpr(node *sitter.Node, content []byte) (*types.IndexExpr, error) {
-	targetNode := findChildByFieldName(node, "target")
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
+	}
+
+	// Initialize index expression
+	indexExpr := &types.IndexExpr{
+		ExprRange: exprRange,
+	}
+
+	// Find collection and index
+	collectionNode := findChildByFieldName(node, "collection")
 	indexNode := findChildByFieldName(node, "index")
 
-	if targetNode == nil || indexNode == nil {
-		return nil, fmt.Errorf("index expression missing parts")
+	if collectionNode != nil {
+		collection, err := parseExpression(collectionNode, content)
+		if err != nil {
+			return nil, err
+		}
+		indexExpr.Collection = collection
 	}
 
-	collection, err := parseExpression(targetNode, content)
-	if err != nil {
-		return nil, err
+	if indexNode != nil {
+		index, err := parseExpression(indexNode, content)
+		if err != nil {
+			return nil, err
+		}
+		indexExpr.Key = index
 	}
 
-	key, err := parseExpression(indexNode, content)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.IndexExpr{
-		Collection: collection, // Changed from Target to Collection
-		Key:        key,        // Changed from Index to Key
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}, nil
+	return indexExpr, nil
 }
 
+// parseTupleExpr parses tuple expressions
 func parseTupleExpr(node *sitter.Node, content []byte) (*types.TupleExpr, error) {
-	tuple := &types.TupleExpr{
-		Expressions: []types.Expression{},
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
 	}
 
-	// Parse items in the tuple
+	// Initialize tuple expression
+	tupleExpr := &types.TupleExpr{
+		Expressions: []types.Expression{},
+		ExprRange:   exprRange,
+	}
+
+	// Parse items
 	cursor := sitter.NewTreeCursor(node)
 	defer cursor.Close()
 
 	if cursor.GoToFirstChild() {
 		for {
-			exprNode := cursor.CurrentNode()
+			itemNode := cursor.CurrentNode()
 
-			// Skip brackets, commas, and structural elements
-			if exprNode.Type() != "[" && exprNode.Type() != "]" &&
-				exprNode.Type() != "," && exprNode.Type() != "tuple_start" &&
-				exprNode.Type() != "tuple_end" {
-
-				// Skip empty or whitespace-only nodes
-				nodeText := string(content[exprNode.StartByte():exprNode.EndByte()])
-				if strings.TrimSpace(nodeText) != "" {
-					expr, err := parseExpression(exprNode, content)
-					if err != nil {
-						return nil, err
-					}
-
-					// Skip null literals that might be artifacts of parsing
-					if literalExpr, ok := expr.(*types.LiteralValue); ok {
-						if literalExpr.ValueType == "null" && literalExpr.Value == "" {
-							// Skip this null value
-						} else {
-							tuple.Expressions = append(tuple.Expressions, expr)
-						}
-					} else {
-						tuple.Expressions = append(tuple.Expressions, expr)
-					}
+			// Skip separators, brackets, and null items
+			if itemNode.Type() != "(" && itemNode.Type() != ")" && itemNode.Type() != "," {
+				item, err := parseExpression(itemNode, content)
+				if err != nil {
+					return nil, err
 				}
+				tupleExpr.Expressions = append(tupleExpr.Expressions, item)
 			}
 
 			if !cursor.GoToNextSibling() {
@@ -2703,409 +2465,401 @@ func parseTupleExpr(node *sitter.Node, content []byte) (*types.TupleExpr, error)
 		cursor.GoToParent()
 	}
 
-	return tuple, nil
+	return tupleExpr, nil
 }
 
+// parseUnaryExpr parses unary operations like !condition, -number
 func parseUnaryExpr(node *sitter.Node, content []byte) (*types.UnaryExpr, error) {
-	// Add debug output
-	nodeText := string(content[node.StartByte():node.EndByte()])
-	debugPrint("parseUnaryExpr - type: %s, line: %d, text: %q, children: %d",
-		node.Type(), node.StartPoint().Row+1, truncateString(nodeText, 30), node.ChildCount())
-
-	// Print all children
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child != nil {
-			childText := string(content[child.StartByte():child.EndByte()])
-			debugPrint("  Child %d: type=%s, text=%q",
-				i, child.Type(), truncateString(childText, 30))
-		}
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
 	}
 
-	operatorNode := findChildByFieldName(node, "operator")
-	if operatorNode == nil {
-		debugPrint("Could not find field 'operator', trying to infer from structure")
-		// For unary operations like -42, the operator is often the first character
-		if node.ChildCount() >= 1 {
-			// Check if the first character is a unary operator
-			if len(nodeText) > 0 && (nodeText[0] == '-' || nodeText[0] == '!') {
-				// Create a simple literal value for the operand
-				valueText := nodeText[1:]
-				debugPrint("Inferred unary operation: %c%s", nodeText[0], valueText)
+	// Get all child nodes
+	var operatorNode, exprNode *sitter.Node
 
-				// Parse the operand
-				var expr types.Expression
-				var err error
+	// Try to find by field names first
+	operatorNode = findChildByFieldName(node, "operator")
+	exprNode = findChildByFieldName(node, "operand")
 
-				// Try to parse the value as a number
-				if nodeText[0] == '-' {
-					// For negative numbers, parse as a number
-					num, err := strconv.ParseFloat(valueText, 64)
-					if err == nil {
-						expr = &types.LiteralValue{
-							Value:     num,
-							ValueType: "number",
-							ExprRange: sitter.Range{
-								StartPoint: node.StartPoint(),
-								EndPoint:   node.EndPoint(),
-								StartByte:  node.StartByte() + 1,
-								EndByte:    node.EndByte(),
-							},
-						}
-					}
-				}
-
-				if expr == nil {
-					// If not a number or not a negative, parse as a regular expression
-					expr, err = parseExpression(node.Child(0), content)
-					if err != nil {
-						return nil, err
-					}
-				}
-
-				return &types.UnaryExpr{
-					Operator: string(nodeText[0]),
-					Expr:     expr,
-					ExprRange: sitter.Range{
-						StartPoint: node.StartPoint(),
-						EndPoint:   node.EndPoint(),
-						StartByte:  node.StartByte(),
-						EndByte:    node.EndByte(),
-					},
-				}, nil
-			}
-		}
+	// If not found, try by position
+	if operatorNode == nil && node.ChildCount() > 0 {
+		operatorNode = node.Child(0)
 	}
 
-	expressionNode := findChildByFieldName(node, "expression")
-	if operatorNode == nil || expressionNode == nil {
+	if exprNode == nil && node.ChildCount() > 1 {
+		exprNode = node.Child(1)
+	}
+
+	if operatorNode == nil || exprNode == nil {
+		// Try direct text inference
+		text := string(content[node.StartByte():node.EndByte()])
+
+		if strings.HasPrefix(text, "!") {
+			operatorText := "!"
+			exprText := strings.TrimSpace(text[1:])
+
+			return &types.UnaryExpr{
+				Operator: operatorText,
+				Expr: &types.LiteralValue{
+					Value:     exprText,
+					ValueType: "string",
+					ExprRange: exprRange,
+				},
+				ExprRange: exprRange,
+			}, nil
+		} else if strings.HasPrefix(text, "-") {
+			operatorText := "-"
+			exprText := strings.TrimSpace(text[1:])
+
+			return &types.UnaryExpr{
+				Operator: operatorText,
+				Expr: &types.LiteralValue{
+					Value:     exprText,
+					ValueType: "string",
+					ExprRange: exprRange,
+				},
+				ExprRange: exprRange,
+			}, nil
+		}
+
 		return nil, fmt.Errorf("unary expression missing parts")
 	}
 
+	// Get operator and expression
 	operator := string(content[operatorNode.StartByte():operatorNode.EndByte()])
-
-	expr, err := parseExpression(expressionNode, content)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.UnaryExpr{
-		Operator: operator,
-		Expr:     expr,
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}, nil
-}
-
-func parseParenExpr(node *sitter.Node, content []byte) (*types.ParenExpr, error) {
-	// Find the expression inside the parentheses
-	exprNode := node.NamedChild(0)
-	if exprNode == nil {
-		return nil, fmt.Errorf("parenthesized expression is empty")
-	}
 
 	expr, err := parseExpression(exprNode, content)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.ParenExpr{
-		Expression: expr,
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
+	return &types.UnaryExpr{
+		Operator:  operator,
+		Expr:      expr,
+		ExprRange: exprRange,
 	}, nil
 }
 
-func parseRelativeTraversalExpr(node *sitter.Node, content []byte) (*types.RelativeTraversalExpr, error) {
-	sourceNode := findChildByFieldName(node, "object")
-	if sourceNode == nil {
-		return nil, fmt.Errorf("traversal expression missing source")
+// parseParenExpr parses parenthesized expressions like (1 + 2) * 3
+func parseParenExpr(node *sitter.Node, content []byte) (*types.ParenExpr, error) {
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
 	}
 
-	source, err := parseExpression(sourceNode, content)
+	// Find the inner expression
+	innerNode := findChildByFieldName(node, "expression")
+	if innerNode == nil {
+		// If not found by field name, try to find by position (skipping parentheses)
+		for i := 1; i < int(node.ChildCount())-1; i++ {
+			innerNode = node.Child(i)
+			break
+		}
+	}
+
+	if innerNode == nil {
+		return nil, fmt.Errorf("parenthesized expression missing inner expression")
+	}
+
+	// Parse the inner expression
+	innerExpr, err := parseExpression(innerNode, content)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the attribute being accessed
+	return &types.ParenExpr{
+		Expression: innerExpr,
+		ExprRange:  exprRange,
+	}, nil
+}
+
+// parseRelativeTraversalExpr parses attribute access expressions like aws_instance.example.id
+func parseRelativeTraversalExpr(node *sitter.Node, content []byte) (*types.RelativeTraversalExpr, error) {
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
+	}
+
+	// Initialize the traversal expression
+	traversalExpr := &types.RelativeTraversalExpr{
+		Traversal: []types.TraversalElem{},
+		ExprRange: exprRange,
+	}
+
+	// Find the source expression and attribute name
+	sourceNode := findChildByFieldName(node, "source")
 	attrNode := findChildByFieldName(node, "attr")
-	if attrNode == nil {
-		return nil, fmt.Errorf("traversal expression missing attribute")
+
+	if sourceNode != nil {
+		source, err := parseExpression(sourceNode, content)
+		if err != nil {
+			return nil, err
+		}
+		traversalExpr.Source = source
 	}
 
-	attr := string(content[attrNode.StartByte():attrNode.EndByte()])
+	if attrNode != nil {
+		// Simple attribute access
+		attrName := string(content[attrNode.StartByte():attrNode.EndByte()])
+		// Remove the leading dot if present
+		if strings.HasPrefix(attrName, ".") {
+			attrName = attrName[1:]
+		}
 
-	// Create a TraversalElem for the attribute access
-	traversal := []types.TraversalElem{
-		{
+		traversalExpr.Traversal = append(traversalExpr.Traversal, types.TraversalElem{
 			Type: "attr",
-			Name: attr,
-			// Index is nil for attribute access
-		},
+			Name: attrName,
+		})
 	}
 
-	return &types.RelativeTraversalExpr{
-		Source:    source,
-		Traversal: traversal,
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}, nil
+	return traversalExpr, nil
 }
 
+// parseTemplateForDirective parses for loops within template strings (%{for x in xs})
 func parseTemplateForDirective(node *sitter.Node, content []byte) (*types.TemplateForDirective, error) {
-	// Extract text to manually parse the for directive because tree-sitter doesn't
-	// give us a reliable structure for template directives
-	forText := string(content[node.StartByte():node.EndByte()])
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
+	}
 
-	// Extract for variables and collection
-	forPart := extractBetween(forText, "%{for ", " in ")
-	collPart := extractBetween(forText, " in ", "}")
+	// Initialize template for directive
+	templateForDir := &types.TemplateForDirective{
+		Content:   []types.Expression{},
+		ExprRange: exprRange,
+	}
 
-	// Check if we have a value_var only or key_var and value_var
-	var keyVar, valueVar string
-	if strings.Contains(forPart, ",") {
-		parts := strings.Split(forPart, ",")
+	// Get the full text to extract variables and collection
+	text := string(content[node.StartByte():node.EndByte()])
+
+	// Match "for x in xs" or "for k, v in xs"
+	// First, extract the intro part
+	introPart := ""
+	if strings.HasPrefix(text, "%{for") {
+		endIntro := strings.Index(text, "~}")
+		if endIntro < 0 {
+			endIntro = strings.Index(text, "}")
+		}
+		if endIntro > 0 {
+			introPart = text[4:endIntro]
+			introPart = strings.TrimSpace(introPart)
+		}
+	}
+
+	// Now extract variables and collection
+	if len(introPart) > 0 {
+		parts := strings.Split(introPart, "in")
 		if len(parts) >= 2 {
-			keyVar = strings.TrimSpace(parts[0])
-			valueVar = strings.TrimSpace(parts[1])
+			// Left side has variables
+			varPart := strings.TrimSpace(parts[0])
+
+			// Check if we have one or two variables
+			if strings.Contains(varPart, ",") {
+				// Two variables: "k, v"
+				vars := strings.Split(varPart, ",")
+				if len(vars) >= 2 {
+					templateForDir.KeyVar = strings.TrimSpace(vars[0])
+					templateForDir.ValueVar = strings.TrimSpace(vars[1])
+				}
+			} else {
+				// One variable: "x"
+				templateForDir.ValueVar = varPart
+			}
+
+			// Right side has collection
+			collPart := strings.TrimSpace(parts[1])
+			// For simplicity, we'll use a reference expression for the collection
+			templateForDir.CollExpr = createReferenceFromText(collPart, exprRange)
 		}
-	} else {
-		valueVar = strings.TrimSpace(forPart)
 	}
 
-	// Extract result expressions
-	exprText := extractBetween(forText, "}", "%{endfor}")
+	// The content is everything between the for directive and the endfor directive
+	contentStart := strings.Index(text, "}")
+	contentEnd := strings.Index(text, "%{endfor")
 
-	// Create template expression for the result
-	resultExpr := &types.TemplateExpr{
-		Parts: []types.Expression{
-			&types.LiteralValue{
-				Value:     exprText,
-				ValueType: "string",
-				ExprRange: sitter.Range{
-					StartPoint: node.StartPoint(),
-					EndPoint:   node.EndPoint(),
-					StartByte:  node.StartByte(),
-					EndByte:    node.EndByte(),
-				},
-			},
-		},
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
+	if contentStart > 0 && contentEnd > contentStart {
+		contentText := text[contentStart+1 : contentEnd]
+
+		// Create a simple literal for the content
+		templateForDir.Content = append(templateForDir.Content, &types.LiteralValue{
+			Value:     contentText,
+			ValueType: "string",
+			ExprRange: exprRange,
+		})
 	}
 
-	// Create a simple reference expression for collection
-	collExpr := &types.ReferenceExpr{
-		Parts: []string{collPart},
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}
-
-	return &types.TemplateForDirective{
-		KeyVar:   keyVar,
-		ValueVar: valueVar,
-		CollExpr: collExpr,
-		Content:  []types.Expression{resultExpr}, // Changed from ValueExpr to Content
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}, nil
+	return templateForDir, nil
 }
 
+// parseTemplateIfDirective parses conditionals within template strings (%{if condition})
 func parseTemplateIfDirective(node *sitter.Node, content []byte) (*types.TemplateIfDirective, error) {
-	// Extract text to manually parse the if directive
-	ifText := string(content[node.StartByte():node.EndByte()])
-
-	// Extract condition
-	condText := extractBetween(ifText, "%{if ", "}")
-
-	// Extract true branch
-	trueText := extractBetween(ifText, "}", "%{else}")
-	if trueText == "" {
-		trueText = extractBetween(ifText, "}", "%{endif}")
+	// Get range information
+	exprRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
 	}
 
-	// Extract false branch if it exists
-	falseText := ""
-	if strings.Contains(ifText, "%{else}") {
-		falseText = extractBetween(ifText, "%{else}", "%{endif}")
+	// Initialize template if directive
+	templateIfDir := &types.TemplateIfDirective{
+		TrueExpr:  []types.Expression{},
+		FalseExpr: []types.Expression{},
+		ExprRange: exprRange,
 	}
 
-	// Create condition expression (simple reference)
-	condExpr := &types.ReferenceExpr{
-		Parts: []string{condText},
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}
+	// Get the full text to extract the condition, true part, and false part
+	text := string(content[node.StartByte():node.EndByte()])
 
-	// Create template expressions for true and false branches
-	trueExpr := &types.TemplateExpr{
-		Parts: []types.Expression{
-			&types.LiteralValue{
-				Value:     trueText,
-				ValueType: "string",
-				ExprRange: sitter.Range{
-					StartPoint: node.StartPoint(),
-					EndPoint:   node.EndPoint(),
-					StartByte:  node.StartByte(),
-					EndByte:    node.EndByte(),
-				},
-			},
-		},
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}
-
-	var falseExpr *types.TemplateExpr
-	if falseText != "" {
-		falseExpr = &types.TemplateExpr{
-			Parts: []types.Expression{
-				&types.LiteralValue{
-					Value:     falseText,
-					ValueType: "string",
-					ExprRange: sitter.Range{
-						StartPoint: node.StartPoint(),
-						EndPoint:   node.EndPoint(),
-						StartByte:  node.StartByte(),
-						EndByte:    node.EndByte(),
-					},
-				},
-			},
-			ExprRange: sitter.Range{
-				StartPoint: node.StartPoint(),
-				EndPoint:   node.EndPoint(),
-				StartByte:  node.StartByte(),
-				EndByte:    node.EndByte(),
-			},
+	// Extract the condition
+	conditionText := ""
+	if strings.HasPrefix(text, "%{if") {
+		endCond := strings.Index(text, "~}")
+		if endCond < 0 {
+			endCond = strings.Index(text, "}")
+		}
+		if endCond > 0 {
+			conditionText = text[4:endCond]
+			conditionText = strings.TrimSpace(conditionText)
 		}
 	}
 
-	// Create the arrays of expressions for true and false branches
-	trueExprs := []types.Expression{trueExpr}
-	var falseExprs []types.Expression
-	if falseExpr != nil {
-		falseExprs = []types.Expression{falseExpr}
+	// Create a reference expression for the condition
+	if len(conditionText) > 0 {
+		templateIfDir.Condition = createReferenceFromText(conditionText, exprRange)
 	}
 
-	return &types.TemplateIfDirective{
-		Condition: condExpr,
-		TrueExpr:  trueExprs,  // Now passing a slice of Expression
-		FalseExpr: falseExprs, // Now passing a slice of Expression
-		ExprRange: sitter.Range{
-			StartPoint: node.StartPoint(),
-			EndPoint:   node.EndPoint(),
-			StartByte:  node.StartByte(),
-			EndByte:    node.EndByte(),
-		},
-	}, nil
+	// Extract the true part (between if and else/endif)
+	trueStart := strings.Index(text, "}")
+	trueEnd := -1
+	if strings.Contains(text, "%{else") {
+		trueEnd = strings.Index(text, "%{else")
+	} else if strings.Contains(text, "%{endif") {
+		trueEnd = strings.Index(text, "%{endif")
+	}
+
+	if trueStart > 0 && trueEnd > trueStart {
+		trueText := text[trueStart+1 : trueEnd]
+
+		// Create a literal for the true part
+		templateIfDir.TrueExpr = append(templateIfDir.TrueExpr, &types.LiteralValue{
+			Value:     trueText,
+			ValueType: "string",
+			ExprRange: exprRange,
+		})
+	}
+
+	// Extract the false part (between else and endif)
+	if strings.Contains(text, "%{else") {
+		falseStart := strings.Index(text, "%{else") + 6 // Skip "%{else"
+		falseStart = strings.Index(text[falseStart:], "}") + falseStart + 1
+		falseEnd := strings.Index(text, "%{endif")
+
+		if falseEnd > falseStart {
+			falseText := text[falseStart:falseEnd]
+
+			// Create a literal for the false part
+			templateIfDir.FalseExpr = append(templateIfDir.FalseExpr, &types.LiteralValue{
+				Value:     falseText,
+				ValueType: "string",
+				ExprRange: exprRange,
+			})
+		}
+	}
+
+	return templateIfDir, nil
 }
 
-// Helper function to extract text between two markers
+// Helper to extract text between two strings
 func extractBetween(text, start, end string) string {
-	startIndex := strings.Index(text, start)
-	if startIndex == -1 {
-		return ""
-	}
-	startIndex += len(start)
-
-	endIndex := strings.Index(text[startIndex:], end)
-	if endIndex == -1 {
+	startIdx := strings.Index(text, start)
+	if startIdx < 0 {
 		return ""
 	}
 
-	return text[startIndex : startIndex+endIndex]
+	startIdx += len(start)
+	endIdx := strings.Index(text[startIdx:], end)
+	if endIdx < 0 {
+		return ""
+	}
+
+	return text[startIdx : startIdx+endIdx]
 }
 
-// Helper function to find a child node by field name
+// Helper to find a child node by field name
 func findChildByFieldName(node *sitter.Node, fieldName string) *sitter.Node {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+	count := node.ChildCount()
+	for i := 0; i < int(count); i++ {
 		field := node.FieldNameForChild(i)
 		if field == fieldName {
-			return child
+			return node.Child(i)
 		}
 	}
 	return nil
 }
 
-// Helper function to find comments associated with a node
-// Returns block comment (if any) and inline comment (if any)
+// Helper to find associated comments
+// Looks for comments just before or on the same line as the node
 func findAssociatedComments(node *sitter.Node, content []byte) (string, string) {
 	var blockComment, inlineComment string
 
-	// Check for block comments (before the node)
-	// We'll collect all consecutive comments before the node
-	var blockComments []string
-	prevSibling := node.PrevSibling()
-
-	// Keep looking at previous siblings until we find a non-comment
-	for prevSibling != nil && prevSibling.Type() == "comment" {
-		commentText := string(content[prevSibling.StartByte():prevSibling.EndByte()])
-		// Add to the beginning of the list to maintain order
-		blockComments = append([]string{strings.TrimSpace(commentText)}, blockComments...)
-		prevSibling = prevSibling.PrevSibling()
-	}
-
-	// Join all block comments with newlines
-	if len(blockComments) > 0 {
-		blockComment = strings.Join(blockComments, "\n")
-	}
-
-	// Check for inline comment (on the same line, after the node)
-	endLine := node.EndPoint().Row
+	// Get parent node to look for sibling comments
 	parent := node.Parent()
+	if parent == nil {
+		return "", ""
+	}
 
-	if parent != nil {
-		cursor := sitter.NewTreeCursor(parent)
-		defer cursor.Close()
+	// Look for a comment node just before this node (block comment)
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		child := parent.Child(i)
+		if child == node {
+			// Found our node, check if the previous sibling was a comment
+			if i > 0 && parent.Child(i-1).Type() == "comment" {
+				commentNode := parent.Child(i - 1)
+				commentText := string(content[commentNode.StartByte():commentNode.EndByte()])
+				blockComment = strings.TrimSpace(commentText)
 
-		if cursor.GoToFirstChild() {
-			// Find the node
-			for cursor.CurrentNode() != node {
-				if !cursor.GoToNextSibling() {
-					break
+				// If there are multiple comment lines before this node, combine them
+				for j := i - 2; j >= 0; j-- {
+					if parent.Child(j).Type() == "comment" {
+						prevComment := parent.Child(j)
+						// Check if this comment is on the previous line (consecutive comments)
+						if prevComment.EndPoint().Row+1 == commentNode.StartPoint().Row {
+							prevCommentText := string(content[prevComment.StartByte():prevComment.EndByte()])
+							blockComment = strings.TrimSpace(prevCommentText) + "\n" + blockComment
+							commentNode = prevComment
+						} else {
+							break
+						}
+					} else {
+						break
+					}
 				}
 			}
+			break
+		}
+	}
 
-			// Check next siblings for an inline comment
-			if cursor.GoToNextSibling() {
-				nextNode := cursor.CurrentNode()
-				if nextNode.Type() == "comment" && nextNode.StartPoint().Row == endLine {
-					commentText := string(content[nextNode.StartByte():nextNode.EndByte()])
-					inlineComment = strings.TrimSpace(commentText)
-				}
-			}
+	// Look for comments on the same line (inline comment)
+	nodeLine := node.EndPoint().Row
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		child := parent.Child(i)
+		if child.Type() == "comment" && child.StartPoint().Row == nodeLine {
+			commentText := string(content[child.StartByte():child.EndByte()])
+			inlineComment = strings.TrimSpace(commentText)
+			break
 		}
 	}
 
