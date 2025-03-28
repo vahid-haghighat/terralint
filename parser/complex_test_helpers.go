@@ -2543,6 +2543,7 @@ func createComplexProviderExpected() types.Body {
 						},
 					},
 					&types.Block{
+						Type:   "dynamic",
 						Labels: []string{"endpoints"},
 						Children: []types.Body{
 							&types.Attribute{
