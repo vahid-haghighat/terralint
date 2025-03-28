@@ -34,6 +34,15 @@ type ObjectItem struct {
 	Value         Expression
 	InlineComment string
 	BlockComment  string // Added to capture block comments
+	ExprRange     sitter.Range
+}
+
+func (o *ObjectItem) ExpressionType() string {
+	return "object_item"
+}
+
+func (o *ObjectItem) Range() sitter.Range {
+	return o.ExprRange
 }
 
 func (o *ObjectExpr) ExpressionType() string {

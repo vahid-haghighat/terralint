@@ -961,7 +961,7 @@ func parseForExpr(node *sitter.Node, content []byte) (types.Expression, error) {
 		}
 	}
 
-	return &types.ForExpr{
+	forExpr := &types.ForExpr{
 		KeyVar:       keyVar,
 		ValueVar:     valueVar,
 		Collection:   collection,
@@ -969,7 +969,18 @@ func parseForExpr(node *sitter.Node, content []byte) (types.Expression, error) {
 		ThenKeyExpr:  thenKeyExpr,
 		ThenValueExpr: thenValueExpr,
 		ExprRange:    exprRange(node),
-	}, nil
+	}
+
+	// If this is a tuple for expression (array context), wrap it in an ArrayExpr
+	if forNode.Type() == "for_tuple_expr" {
+		return &types.ArrayExpr{
+			Items:     []types.Expression{forExpr},
+			ExprRange: exprRange(node),
+		}, nil
+	}
+
+	// For object expressions, return the ForExpr directly
+	return forExpr, nil
 }
 
 func parseConditionalExpr(node *sitter.Node, content []byte) (types.Expression, error) {
@@ -1141,176 +1152,103 @@ func parseCollectionValue(node *sitter.Node, content []byte) (types.Expression, 
 }
 
 func parseVariableExpr(node *sitter.Node, content []byte) (types.Expression, error) {
-	// First, handle the identifier in the current node
 	if node.ChildCount() == 0 {
-		return nil, fmt.Errorf("variable expression node has no children")
+		return nil, fmt.Errorf("variable expression has no children")
 	}
 
+	// Get the identifier from the first child
 	firstChild := node.Child(0)
 	if firstChild.Type() != "identifier" {
-		return nil, fmt.Errorf("variable expression must start with an identifier")
+		return nil, fmt.Errorf("first child of variable expression is not an identifier")
 	}
 
-	// Get the initial identifier
+	// Initialize parts with the identifier
 	parts := []string{firstChild.Content(content)}
 
-	// Check if this is part of a traversal
+	// Process siblings (get_attr and index nodes)
 	current := node.NextNamedSibling()
-	if current == nil {
-		// If there are no siblings, this is a simple reference
-		return &types.ReferenceExpr{
-			Parts:     parts,
-			ExprRange: exprRange(node),
-		}, nil
-	}
-
-	// Build traversal elements
-	var traversal []types.TraversalElem
-	source := &types.ReferenceExpr{
-		Parts:     parts,
-		ExprRange: exprRange(node),
-	}
-
 	for current != nil {
 		switch current.Type() {
 		case "get_attr":
-			// Skip the leading dot and add the attribute name
-			attrName := current.Content(content)
-			if strings.HasPrefix(attrName, ".") {
-				attrName = attrName[1:]
-			}
-			traversal = append(traversal, types.TraversalElem{
-				Type: "attr",
-				Name: attrName,
-			})
-		case "index":
+			// Skip the leading dot in attribute name
+			attrName := strings.TrimPrefix(current.Content(content), ".")
+			parts = append(parts, attrName)
+		case "index_expr":
 			// Handle index expressions
 			if current.ChildCount() > 0 {
-				indexChild := current.Child(0)
-				var indexExpr types.Expression
-				var err error
-				if indexChild.Type() == "string_lit" {
+				keyNode := current.Child(0)
+				if keyNode.Type() == "string_lit" {
 					// Strip quotes from string literals
-					indexValue := strings.Trim(indexChild.Content(content), "\"")
-					indexExpr = &types.LiteralValue{
-						Value:     indexValue,
-						ValueType: "string",
-						ExprRange: exprRange(indexChild),
-					}
-				} else {
-					indexExpr = &types.LiteralValue{
-						Value:     indexChild.Content(content),
-						ValueType: "string",
-						ExprRange: exprRange(indexChild),
-					}
+					str := strings.Trim(keyNode.Content(content), "\"")
+					parts = append(parts, str)
 				}
-				traversal = append(traversal, types.TraversalElem{
-					Type:  "index",
-					Index: indexExpr,
-				})
 			}
 		}
 		current = current.NextNamedSibling()
 	}
 
-	// If we have traversal elements, return a RelativeTraversalExpr
-	if len(traversal) > 0 {
+	// If there are multiple parts, this is a traversal expression
+	if len(parts) > 1 {
+		traversal := make([]types.TraversalElem, len(parts)-1)
+		for i, part := range parts[1:] {
+			traversal[i] = types.TraversalElem{
+				Name: part,
+			}
+		}
 		return &types.RelativeTraversalExpr{
-			Source:    source,
+			Source:    nil,
 			Traversal: traversal,
 			ExprRange: exprRange(node),
 		}, nil
 	}
 
-	// Otherwise, return the reference expression
-	return source, nil
+	// Otherwise, it's a simple reference
+	return &types.ReferenceExpr{
+		Parts:     parts,
+		ExprRange: exprRange(node),
+	}, nil
 }
 
 func parseGetAttr(node *sitter.Node, content []byte) (types.Expression, error) {
-	// First, check if we're part of a variable expression
-	var source types.Expression
-	current := node.Parent()
-	for current != nil {
-		if current.Type() == "variable_expr" {
-			if current.ChildCount() > 0 {
-				firstChild := current.Child(0)
-				if firstChild.Type() == "identifier" {
-					source = &types.ReferenceExpr{
-						Parts:     []string{firstChild.Content(content)},
-						ExprRange: exprRange(firstChild),
+	// Skip the leading dot in attribute name
+	attrName := strings.TrimPrefix(node.Content(content), ".")
+
+	// Initialize parts with the attribute name
+	parts := []string{attrName}
+
+	// Process the source expression
+	parent := node.Parent()
+	if parent != nil && parent.Type() == "variable_expr" {
+		// If the source is a variable expression, parse it and combine parts
+		sourceExpr, err := parseVariableExpr(parent, content)
+		if err != nil {
+			return nil, err
+		}
+
+		if refExpr, ok := sourceExpr.(*types.ReferenceExpr); ok {
+			// Combine the source parts with the attribute name
+			parts = append(refExpr.Parts, attrName)
+
+			// If there are multiple parts, this is a traversal expression
+			if len(parts) > 1 {
+				traversal := make([]types.TraversalElem, len(parts)-1)
+				for i, part := range parts[1:] {
+					traversal[i] = types.TraversalElem{
+						Name: part,
 					}
 				}
-			}
-			break
-		}
-		current = current.Parent()
-	}
-
-	// If no source was found, create a new reference expression
-	if source == nil {
-		return nil, fmt.Errorf("get_attr node not attached to a variable expression")
-	}
-
-	// Build traversal elements
-	var traversal []types.TraversalElem
-
-	// Process the current node
-	attrName := node.Content(content)
-	if strings.HasPrefix(attrName, ".") {
-		attrName = attrName[1:]
-	}
-	traversal = append(traversal, types.TraversalElem{
-		Type: "attr",
-		Name: attrName,
-	})
-
-	// Process any remaining siblings
-	current = node.NextNamedSibling()
-	for current != nil {
-		switch current.Type() {
-		case "get_attr":
-			// Skip the leading dot and add the attribute name
-			attrName := current.Content(content)
-			if strings.HasPrefix(attrName, ".") {
-				attrName = attrName[1:]
-			}
-			traversal = append(traversal, types.TraversalElem{
-				Type: "attr",
-				Name: attrName,
-			})
-		case "index":
-			// Handle index expressions
-			if current.ChildCount() > 0 {
-				indexChild := current.Child(0)
-				var indexExpr types.Expression
-				if indexChild.Type() == "string_lit" {
-					// Strip quotes from string literals
-					indexValue := strings.Trim(indexChild.Content(content), "\"")
-					indexExpr = &types.LiteralValue{
-						Value:     indexValue,
-						ValueType: "string",
-						ExprRange: exprRange(indexChild),
-					}
-				} else {
-					indexExpr = &types.LiteralValue{
-						Value:     indexChild.Content(content),
-						ValueType: "string",
-						ExprRange: exprRange(indexChild),
-					}
-				}
-				traversal = append(traversal, types.TraversalElem{
-					Type:  "index",
-					Index: indexExpr,
-				})
+				return &types.RelativeTraversalExpr{
+					Source:    nil,
+					Traversal: traversal,
+					ExprRange: exprRange(node),
+				}, nil
 			}
 		}
-		current = current.NextNamedSibling()
 	}
 
-	// Return a RelativeTraversalExpr with the source and traversal
-	return &types.RelativeTraversalExpr{
-		Source:    source,
-		Traversal: traversal,
+	// If we can't process the source expression, just return a reference with the attribute name
+	return &types.ReferenceExpr{
+		Parts:     parts,
 		ExprRange: exprRange(node),
 	}, nil
 }
