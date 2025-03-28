@@ -141,13 +141,6 @@ func compareStructures(t *testing.T, expected, actual types.Body) {
 			return
 		}
 		compareAttributes(t, exp, act)
-	case *types.DynamicBlock:
-		act, ok := actual.(*types.DynamicBlock)
-		if !ok {
-			t.Errorf("Type assertion failed: expected *types.DynamicBlock, got %T", actual)
-			return
-		}
-		compareDynamicBlocks(t, exp, act)
 	default:
 		t.Errorf("Unsupported type for comparison: %T", expected)
 	}
@@ -236,38 +229,6 @@ func compareAttributes(t *testing.T, expected, actual *types.Attribute) {
 
 	// Compare the attribute values
 	compareExpressions(t, expected.Value, actual.Value)
-}
-
-// compareDynamicBlocks compares two DynamicBlock structures
-func compareDynamicBlocks(t *testing.T, expected, actual *types.DynamicBlock) {
-	// Check if the labels match
-	if !reflect.DeepEqual(expected.Labels, actual.Labels) {
-		t.Errorf("Dynamic block labels mismatch: expected %v, got %v", expected.Labels, actual.Labels)
-	}
-
-	// Compare the for_each expressions
-	compareExpressions(t, expected.ForEach, actual.ForEach)
-
-	// Check if the iterator matches
-	if expected.Iterator != actual.Iterator {
-		t.Errorf("Dynamic block iterator mismatch: expected %s, got %s", expected.Iterator, actual.Iterator)
-	}
-
-	// Check if the number of content blocks matches
-	if len(expected.Content) != len(actual.Content) {
-		t.Errorf("Dynamic block content count mismatch: expected %d, got %d",
-			len(expected.Content), len(actual.Content))
-		return
-	}
-
-	// Compare each content block
-	for i, expContent := range expected.Content {
-		if i >= len(actual.Content) {
-			t.Errorf("Missing content at index %d in actual", i)
-			continue
-		}
-		compareStructures(t, expContent, actual.Content[i])
-	}
 }
 
 // compareExpressions compares two Expression structures

@@ -133,21 +133,6 @@ func (b *BinaryExpr) Range() sitter.Range {
 	return b.ExprRange
 }
 
-// DynamicBlock represents dynamic block declarations
-type DynamicBlock struct {
-	ForEach       Expression // Expression that provides the items to iterate over
-	Iterator      string     // Optional iterator name
-	Labels        []string   // Labels for the dynamic block
-	Content       []Body     // The content of the block to be repeated
-	Range         sitter.Range
-	InlineComment string
-	BlockComment  string
-}
-
-func (d *DynamicBlock) BodyType() string {
-	return "dynamic_block"
-}
-
 // ForExpr represents for expressions: [for x in xs : upper(x)] or {for k, v in map : k => v}
 type ForExpr struct {
 	// Iterator variables
