@@ -1243,11 +1243,141 @@ func createComplexDataSourceExpected() types.Body {
 				Labels:       []string{"aws_iam_policy_document", "complex"},
 				BlockComment: "// Data source with complex expressions",
 				Children: []types.Body{
-					&types.DynamicBlock{
-						ForEach:  &types.ReferenceExpr{Parts: []string{"var", "policy_statements"}},
-						Iterator: "statement",
-						Labels:   []string{"statement"},
-						Content:  []types.Body{},
+					&types.Block{
+						Type:   "dynamic",
+						Labels: []string{"statement"},
+						Children: []types.Body{
+							&types.Attribute{
+								Name: "for_each",
+								Value: &types.ReferenceExpr{
+									Parts: []string{"var", "policy_statements"},
+								},
+							},
+							&types.Block{
+								Type: "content",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "sid",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"statement", "value"}},
+												&types.LiteralValue{Value: "sid", ValueType: "string"},
+												&types.TemplateExpr{
+													Parts: []types.Expression{&types.LiteralValue{Value: "Statement", ValueType: "string"}, &types.ReferenceExpr{Parts: []string{"statement", "key"}}},
+												},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "effect",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"statement", "value"}},
+												&types.LiteralValue{Value: "effect", ValueType: "string"},
+												&types.LiteralValue{Value: "Allow", ValueType: "string"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name:  "actions",
+										Value: &types.ReferenceExpr{Parts: []string{"statement", "value", "actions"}},
+									},
+									&types.Attribute{
+										Name:  "resources",
+										Value: &types.ReferenceExpr{Parts: []string{"statement", "value", "resources"}},
+									},
+									&types.Block{
+										Type:   "dynamic",
+										Labels: []string{"condition"},
+										Children: []types.Body{
+											&types.Attribute{
+												Name: "for_each",
+												Value: &types.FunctionCallExpr{
+													Name: "lookup",
+													Args: []types.Expression{
+														&types.ReferenceExpr{Parts: []string{"statement", "value"}},
+														&types.LiteralValue{Value: "conditions", ValueType: "string"},
+														&types.ArrayExpr{},
+													},
+												},
+											},
+											&types.Block{
+												Type: "content",
+												Children: []types.Body{
+													&types.Attribute{
+														Name:  "test",
+														Value: &types.ReferenceExpr{Parts: []string{"condition", "value", "test"}},
+													},
+													&types.Attribute{
+														Name:  "variable",
+														Value: &types.ReferenceExpr{Parts: []string{"condition", "value", "variable"}},
+													},
+													&types.Attribute{
+														Name:  "values",
+														Value: &types.ReferenceExpr{Parts: []string{"condition", "value", "values"}},
+													},
+												},
+											},
+										},
+									},
+									&types.Block{
+										Type:   "dynamic",
+										Labels: []string{"principals"},
+										Children: []types.Body{
+											&types.Attribute{
+												Name: "for_each",
+												Value: &types.FunctionCallExpr{
+													Name: "lookup",
+													Args: []types.Expression{
+														&types.ReferenceExpr{Parts: []string{"statement", "value"}},
+														&types.LiteralValue{Value: "principals", ValueType: "string"},
+														&types.ArrayExpr{},
+													},
+												},
+											},
+											&types.Block{
+												Type: "content",
+												Children: []types.Body{
+													&types.Attribute{
+														Name:  "type",
+														Value: &types.ReferenceExpr{Parts: []string{"principals", "value", "type"}},
+													},
+													&types.Attribute{
+														Name:  "identifiers",
+														Value: &types.ReferenceExpr{Parts: []string{"principals", "value", "identifiers"}},
+													},
+												},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "not_actions",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"statement", "value"}},
+												&types.LiteralValue{Value: "not_actions", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "not_resources",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"statement", "value"}},
+												&types.LiteralValue{Value: "not_resources", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+								},
+							},
+						},
+						BlockComment: "// Dynamic statement blocks",
 					},
 					&types.Block{
 						Type: "statement",
@@ -1261,12 +1391,33 @@ func createComplexDataSourceExpected() types.Body {
 								Value: &types.LiteralValue{Value: "Allow", ValueType: "string"},
 							},
 							&types.Attribute{
-								Name:  "actions",
-								Value: &types.ArrayExpr{},
+								Name: "actions",
+								Value: &types.ArrayExpr{
+									Items: []types.Expression{
+										&types.LiteralValue{Value: "s3:GetObject", ValueType: "string"},
+										&types.LiteralValue{Value: "s3:ListBucket", ValueType: "string"},
+									},
+								},
 							},
 							&types.Attribute{
-								Name:  "resources",
-								Value: &types.ArrayExpr{},
+								Name: "resources",
+								Value: &types.ArrayExpr{
+									Items: []types.Expression{
+										&types.TemplateExpr{
+											Parts: []types.Expression{
+												&types.LiteralValue{Value: "arn:aws:s3:::", ValueType: "string"},
+												&types.ReferenceExpr{Parts: []string{"var", "bucket_name"}},
+											},
+										},
+										&types.TemplateExpr{
+											Parts: []types.Expression{
+												&types.LiteralValue{Value: "arn:aws:s3:::", ValueType: "string"},
+												&types.ReferenceExpr{Parts: []string{"var", "bucket_name"}},
+												&types.LiteralValue{Value: "/*", ValueType: "string"},
+											},
+										},
+									},
+								},
 							},
 							&types.Block{
 								Type: "condition",
@@ -1280,8 +1431,12 @@ func createComplexDataSourceExpected() types.Body {
 										Value: &types.LiteralValue{Value: "aws:SourceVpc", ValueType: "string"},
 									},
 									&types.Attribute{
-										Name:  "values",
-										Value: &types.ArrayExpr{},
+										Name: "values",
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"var", "vpc_id"}},
+											},
+										},
 									},
 								},
 							},
@@ -1297,8 +1452,13 @@ func createComplexDataSourceExpected() types.Body {
 										Value: &types.LiteralValue{Value: "aws:PrincipalTag/Role", ValueType: "string"},
 									},
 									&types.Attribute{
-										Name:  "values",
-										Value: &types.ArrayExpr{},
+										Name: "values",
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.LiteralValue{Value: "Admin", ValueType: "string"},
+												&types.LiteralValue{Value: "Developer", ValueType: "string"},
+											},
+										},
 									},
 								},
 							},
@@ -1310,12 +1470,23 @@ func createComplexDataSourceExpected() types.Body {
 										Value: &types.LiteralValue{Value: "AWS", ValueType: "string"},
 									},
 									&types.Attribute{
-										Name:  "identifiers",
-										Value: &types.ArrayExpr{},
+										Name: "identifiers",
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.TemplateExpr{
+													Parts: []types.Expression{
+														&types.LiteralValue{Value: "arn:aws:iam::", ValueType: "string"},
+														&types.ReferenceExpr{Parts: []string{"var", "account_id"}},
+														&types.LiteralValue{Value: ":root", ValueType: "string"},
+													},
+												},
+											},
+										},
 									},
 								},
 							},
 						},
+						BlockComment: "// Override with inline statement",
 					},
 				},
 			},
