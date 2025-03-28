@@ -56,7 +56,8 @@ func createComplexModuleExpected() types.Body {
 									},
 								},
 								{
-									Key: &types.ReferenceExpr{Parts: []string{"enable_dns"}},
+									Key:          &types.ReferenceExpr{Parts: []string{"enable_dns"}},
+									BlockComment: "// Nested conditional expression",
 									Value: &types.ConditionalExpr{
 										Condition: &types.BinaryExpr{
 											Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
@@ -103,10 +104,62 @@ func createComplexModuleExpected() types.Body {
 														Key:   &types.ReferenceExpr{Parts: []string{"ManagedBy"}},
 														Value: &types.LiteralValue{Value: "terraform", ValueType: "string"},
 													},
+													{
+														Key: &types.ReferenceExpr{Parts: []string{"Complex"}},
+														Value: &types.FunctionCallExpr{
+															Name: "jsonencode",
+															Args: []types.Expression{
+																&types.ObjectExpr{
+																	Items: []types.ObjectItem{
+																		{
+																			Key:   &types.ReferenceExpr{Parts: []string{"nested"}},
+																			Value: &types.LiteralValue{Value: "value", ValueType: "string"},
+																		},
+																		{
+																			Key: &types.ReferenceExpr{Parts: []string{"list"}},
+																			Value: &types.ArrayExpr{
+																				Items: []types.Expression{
+																					&types.LiteralValue{Value: 1, ValueType: "number"},
+																					&types.LiteralValue{Value: 2, ValueType: "number"},
+																					&types.LiteralValue{Value: 3, ValueType: "number"},
+																					&types.LiteralValue{Value: 4, ValueType: "number"},
+																				},
+																			},
+																		},
+																		{
+																			Key: &types.ReferenceExpr{Parts: []string{"map"}},
+																			Value: &types.ObjectExpr{
+																				Items: []types.ObjectItem{
+																					{
+																						Key:   &types.ReferenceExpr{Parts: []string{"key1"}},
+																						Value: &types.LiteralValue{Value: "value1", ValueType: "string"},
+																					},
+																					{
+																						Key:   &types.ReferenceExpr{Parts: []string{"key2"}},
+																						Value: &types.LiteralValue{Value: 42, ValueType: "number"},
+																					},
+																				},
+																			},
+																		},
+																	},
+																},
+															},
+														},
+													},
 												},
+											},
+											&types.ConditionalExpr{
+												Condition: &types.BinaryExpr{
+													Left:     &types.ReferenceExpr{Parts: []string{"var", "additional_tags"}},
+													Operator: "!=",
+													Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
+												},
+												TrueExpr:  &types.ReferenceExpr{Parts: []string{"var", "additional_tags"}},
+												FalseExpr: &types.ObjectExpr{},
 											},
 										},
 									},
+									BlockComment: "// Complex object with nested expressions",
 								},
 							},
 						},
@@ -114,31 +167,30 @@ func createComplexModuleExpected() types.Body {
 					&types.Attribute{
 						Name:         "subnet_cidrs",
 						BlockComment: "// Complex for expression with filtering and transformation",
-						Value: &types.ForExpr{
-							KeyVar:     "i",
-							ValueVar:   "subnet",
-							Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
-							ThenKeyExpr: &types.FunctionCallExpr{
-								Name: "cidrsubnet",
-								Args: []types.Expression{
-									&types.ReferenceExpr{Parts: []string{"var", "base_cidr_block"}},
-									&types.LiteralValue{Value: 8, ValueType: "number"},
-									&types.BinaryExpr{
-										Left:     &types.ReferenceExpr{Parts: []string{"i"}},
-										Operator: "+",
-										Right:    &types.LiteralValue{Value: 10, ValueType: "number"},
+						Value: &types.ArrayExpr{
+							Items: []types.Expression{
+								&types.ForExpr{
+									KeyVar:     "i",
+									ValueVar:   "subnet",
+									Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
+									ThenKeyExpr: &types.FunctionCallExpr{
+										Name: "cidrsubnet",
+										Args: []types.Expression{
+											&types.ReferenceExpr{Parts: []string{"var", "base_cidr_block"}},
+											&types.LiteralValue{Value: 8, ValueType: "number"},
+											&types.BinaryExpr{
+												Left:     &types.ReferenceExpr{Parts: []string{"i"}},
+												Operator: "+",
+												Right:    &types.LiteralValue{Value: 10, ValueType: "number"},
+											},
+										},
+									},
+									Condition: &types.BinaryExpr{
+										Left:     &types.ReferenceExpr{Parts: []string{"subnet", "create"}},
+										Operator: "==",
+										Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
 									},
 								},
-							},
-							Condition: &types.BinaryExpr{
-								Left: &types.RelativeTraversalExpr{
-									Source: &types.ReferenceExpr{Parts: []string{"subnet"}},
-									Traversal: []types.TraversalElem{
-										{Type: "attr", Name: "create"},
-									},
-								},
-								Operator: "==",
-								Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
 							},
 						},
 					},
@@ -228,12 +280,7 @@ func createComplexModuleExpected() types.Body {
 										},
 									},
 								},
-								Condition: &types.RelativeTraversalExpr{
-									Source: &types.ReferenceExpr{Parts: []string{"subnet"}},
-									Traversal: []types.TraversalElem{
-										{Type: "attr", Name: "enabled"},
-									},
-								},
+								Condition: &types.ReferenceExpr{Parts: []string{"subnet", "enabled"}},
 							},
 							Condition: &types.FunctionCallExpr{
 								Name: "contains",
@@ -256,18 +303,13 @@ func createComplexModuleExpected() types.Body {
 											KeyVar:     "zone_key",
 											ValueVar:   "zone",
 											Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
-											ThenValueExpr: &types.ArrayExpr{
+											ThenKeyExpr: &types.ArrayExpr{
 												Items: []types.Expression{
 													&types.ForExpr{
-														KeyVar:     "subnet_key",
-														ValueVar:   "subnet",
-														Collection: &types.ReferenceExpr{Parts: []string{"zone"}},
-														ThenValueExpr: &types.RelativeTraversalExpr{
-															Source: &types.ReferenceExpr{Parts: []string{"subnet"}},
-															Traversal: []types.TraversalElem{
-																{Type: "attr", Name: "id"},
-															},
-														},
+														KeyVar:      "subnet_key",
+														ValueVar:    "subnet",
+														Collection:  &types.ReferenceExpr{Parts: []string{"zone"}},
+														ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
 													},
 												},
 											},
@@ -403,7 +445,8 @@ func createComplexModuleExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name: "security_groups",
+						Name:         "security_groups",
+						BlockComment: "// Complex function calls with nested expressions",
 						Value: &types.FunctionCallExpr{
 							Name: "compact",
 							Args: []types.Expression{
@@ -443,7 +486,8 @@ func createComplexModuleExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name: "custom_template",
+						Name:         "custom_template",
+						BlockComment: "// Template with directives",
 						Value: &types.FunctionCallExpr{
 							Name: "templatefile",
 							Args: []types.Expression{
@@ -469,22 +513,26 @@ func createComplexModuleExpected() types.Body {
 										},
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"subnets"}},
-											Value: &types.ForExpr{
-												ValueVar:   "subnet",
-												Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
-												ThenValueExpr: &types.ObjectExpr{
-													Items: []types.ObjectItem{
-														{
-															Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-															Value: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
-														},
-														{
-															Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
-															Value: &types.ReferenceExpr{Parts: []string{"subnet", "cidr_block"}},
-														},
-														{
-															Key:   &types.ReferenceExpr{Parts: []string{"az"}},
-															Value: &types.ReferenceExpr{Parts: []string{"subnet", "availability_zone"}},
+											Value: &types.ArrayExpr{
+												Items: []types.Expression{
+													&types.ForExpr{
+														KeyVar:     "subnet",
+														Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
+														ThenKeyExpr: &types.ObjectExpr{
+															Items: []types.ObjectItem{
+																{
+																	Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																	Value: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
+																},
+																{
+																	Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
+																	Value: &types.ReferenceExpr{Parts: []string{"subnet", "cidr_block"}},
+																},
+																{
+																	Key:   &types.ReferenceExpr{Parts: []string{"az"}},
+																	Value: &types.ReferenceExpr{Parts: []string{"subnet", "availability_zone"}},
+																},
+															},
 														},
 													},
 												},
@@ -522,18 +570,119 @@ func createComplexModuleExpected() types.Body {
 							},
 						},
 					},
-					&types.DynamicBlock{
-						ForEach:  &types.ReferenceExpr{Parts: []string{"var", "ingress_rules"}},
-						Iterator: "rule",
-						Labels:   []string{"ingress"},
-						Content: []types.Body{
-							&types.Attribute{Name: "description"},
-							&types.Attribute{Name: "from_port"},
-							&types.Attribute{Name: "to_port"},
-							&types.Attribute{Name: "protocol"},
-							&types.Attribute{Name: "cidr_blocks"},
-							&types.Attribute{Name: "security_groups"},
-							&types.Attribute{Name: "self"},
+					&types.Block{
+						Type:   "dynamic",
+						Labels: []string{"ingress"},
+						Children: []types.Body{
+							&types.Attribute{
+								Name:  "for_each",
+								Value: &types.ReferenceExpr{Parts: []string{"var", "ingress_rules"}},
+							},
+							&types.Attribute{
+								Name:  "iterator",
+								Value: &types.LiteralValue{Value: "rule", ValueType: "string"},
+							},
+							&types.Block{
+								Type: "content",
+								Children: []types.Body{
+									&types.Attribute{
+										Name: "description",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"rule", "value"}},
+												&types.LiteralValue{Value: "description", ValueType: "string"},
+												&types.TemplateExpr{
+													Parts: []types.Expression{
+														&types.LiteralValue{Value: "Ingress Rule ", ValueType: "string"},
+														&types.ReferenceExpr{Parts: []string{"rule", "key"}},
+													},
+												},
+											},
+										},
+									},
+									&types.Attribute{
+										Name:  "from_port",
+										Value: &types.ReferenceExpr{Parts: []string{"rule", "value", "from_port"}},
+									},
+									&types.Attribute{
+										Name:  "to_port",
+										Value: &types.ReferenceExpr{Parts: []string{"rule", "value", "to_port"}},
+									},
+									&types.Attribute{
+										Name: "protocol",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"rule", "value"}},
+												&types.LiteralValue{Value: "protocol", ValueType: "string"},
+												&types.LiteralValue{Value: "tcp", ValueType: "string"},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "cidr_blocks",
+										Value: &types.ConditionalExpr{
+											Condition: &types.BinaryExpr{
+												Left: &types.FunctionCallExpr{
+													Name: "lookup",
+													Args: []types.Expression{
+														&types.ReferenceExpr{Parts: []string{"rule", "value"}},
+														&types.LiteralValue{Value: "cidr_blocks", ValueType: "string"},
+														&types.LiteralValue{Value: nil, ValueType: "null"},
+													},
+												},
+												Operator: "!=",
+												Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
+											},
+											TrueExpr: &types.ReferenceExpr{Parts: []string{"rule", "value", "cidr_blocks"}},
+											FalseExpr: &types.ArrayExpr{
+												Items: []types.Expression{
+													&types.ForExpr{
+														KeyVar:     "cidr",
+														Collection: &types.ReferenceExpr{Parts: []string{"var", "default_cidrs"}},
+														ThenKeyExpr: &types.ReferenceExpr{
+															Parts: []string{"cidr"},
+														},
+														Condition: &types.UnaryExpr{
+															Operator: "!",
+															Expr: &types.FunctionCallExpr{
+																Name: "contains",
+																Args: []types.Expression{
+																	&types.ReferenceExpr{Parts: []string{"var", "excluded_cidrs"}},
+																	&types.ReferenceExpr{Parts: []string{"cidr"}},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "security_groups",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"rule", "value"}},
+												&types.LiteralValue{Value: "security_group_ids", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "self",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"rule", "value"}},
+												&types.LiteralValue{Value: "self", ValueType: "string"},
+												&types.LiteralValue{Value: false, ValueType: "bool"},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					&types.Attribute{
