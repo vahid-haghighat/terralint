@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -14,7 +15,7 @@ import (
 )
 
 // Enable/disable debug printing
-var debugEnabled = false
+var debugEnabled = true
 
 // debugPrint prints a debug message if debugging is enabled
 func debugPrint(format string, args ...interface{}) {
@@ -282,9 +283,88 @@ func renderExpression(expr types.Expression) (string, error) {
 		builder.WriteString(")")
 		return builder.String(), nil
 
-	// Implement other expression types as needed
+	case *types.ForExpr:
+		var builder strings.Builder
+		builder.WriteString("for ")
+		if e.KeyVar != "" {
+			builder.WriteString(e.KeyVar + ", ")
+		}
+		builder.WriteString(e.ValueVar + " in ")
+		renderedCollection, err := renderExpression(e.Collection)
+		if err != nil {
+			return "", err
+		}
+		builder.WriteString(renderedCollection)
+		builder.WriteString(" : ")
+
+		if e.ThenKeyExpr != nil {
+			renderedKey, err := renderExpression(e.ThenKeyExpr)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(renderedKey)
+		}
+
+		if e.ThenValueExpr != nil {
+			builder.WriteString(" => ")
+			renderedValue, err := renderExpression(e.ThenValueExpr)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(renderedValue)
+		}
+
+		return builder.String(), nil
+
+	case *types.ConditionalExpr:
+		var builder strings.Builder
+		builder.WriteString("if ")
+		renderedCondition, err := renderExpression(e.Condition)
+		if err != nil {
+			return "", err
+		}
+		builder.WriteString(renderedCondition)
+		builder.WriteString(" then ")
+		renderedTrueExpr, err := renderExpression(e.TrueExpr)
+		if err != nil {
+			return "", err
+		}
+		builder.WriteString(renderedTrueExpr)
+		builder.WriteString(" else ")
+		renderedFalseExpr, err := renderExpression(e.FalseExpr)
+		if err != nil {
+			return "", err
+		}
+		builder.WriteString(renderedFalseExpr)
+		builder.WriteString("\n")
+		return builder.String(), nil
+
+	case *types.BinaryExpr:
+		var builder strings.Builder
+		renderedLeft, err := renderExpression(e.Left)
+		if err != nil {
+			return "", err
+		}
+		builder.WriteString(renderedLeft)
+		builder.WriteString(" ")
+		builder.WriteString(e.Operator)
+		builder.WriteString(" ")
+		renderedRight, err := renderExpression(e.Right)
+		if err != nil {
+			return "", err
+		}
+		builder.WriteString(renderedRight)
+		return builder.String(), nil
+
+	case *types.ParenExpr:
+		renderedExpr, err := renderExpression(e.Expression)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("(%s)", renderedExpr), nil
+
 	default:
-		return fmt.Sprintf("/* Unsupported expression type: %T */", expr), nil
+		return "", fmt.Errorf("unhandled expression type: %T", expr)
 	}
 }
 
@@ -405,8 +485,28 @@ func parseNode(node *sitter.Node, content []byte) (types.Body, error) {
 		// Regular comments are attached to their respective blocks/attributes
 		return nil, nil
 	default:
-		// Handle unknown node types or return an error
-		return nil, fmt.Errorf("unknown node type: %s", nodeType)
+		// Log unknown node types for debugging
+		fmt.Printf("Unknown node type: %s\n", nodeType)
+		// Skip non-expression nodes like punctuation
+		if nodeType == "=" || nodeType == "," || nodeType == "." || nodeType == "[" || nodeType == "]" || nodeType == "{" || nodeType == "}" || nodeType == "(" || nodeType == ")" {
+			return nil, nil
+		}
+		// For any other type of node, try to parse it as an expression
+		expr, err := parseExpression(node, content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse unknown node as expression: %w", err)
+		}
+		// Create an attribute with the expression value
+		return &types.Attribute{
+			Name:  "value",
+			Value: expr,
+			Range: sitter.Range{
+				StartPoint: node.StartPoint(),
+				EndPoint:   node.EndPoint(),
+				StartByte:  node.StartByte(),
+				EndByte:    node.EndByte(),
+			},
+		}, nil
 	}
 }
 
@@ -417,12 +517,11 @@ func parseBodyNode(node *sitter.Node, content []byte) (*types.Root, error) {
 		Children: []types.Body{},
 	}
 
-	for i := range node.NamedChildCount() {
-		child, err := parseNode(node.NamedChild(int(i)), content)
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child, err := parseNode(node.NamedChild(i), content)
 		if err != nil {
 			return nil, err
 		}
-
 		body.Children = append(body.Children, child)
 	}
 
@@ -458,6 +557,10 @@ func parseFormatDirective(node *sitter.Node, content []byte) *types.FormatDirect
 
 // parseBlock converts a tree-sitter block node to our Block type
 func parseBlock(node *sitter.Node, content []byte) (types.Body, error) {
+	if node == nil {
+		return nil, fmt.Errorf("nil node passed to parseBlock")
+	}
+
 	// Get range information
 	nodeRange := sitter.Range{
 		StartPoint: node.StartPoint(),
@@ -474,73 +577,14 @@ func parseBlock(node *sitter.Node, content []byte) (types.Body, error) {
 		Children: []types.Body{},
 	}
 
-	// Look for comments at the beginning of the file if this is the first block
-	if node.StartPoint().Row <= 3 { // Check if it's near the top of the file
-		// For simplicity, let's just check if this is a module block and manually add the header comments
-		if node.ChildCount() > 0 && node.Child(0).Type() == "identifier" {
-			blockType := string(content[node.Child(0).StartByte():node.Child(0).EndByte()])
-			if blockType == "module" {
-				// Find all comments at the beginning of the file
-				var fileComments []string
-
-				// Manually check the first few lines for comments
-				lines := strings.Split(string(content), "\n")
-				for i := 0; i < len(lines) && i < 4; i++ {
-					line := strings.TrimSpace(lines[i])
-					if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "#") {
-						fileComments = append(fileComments, line)
-					}
-				}
-
-				if len(fileComments) > 0 {
-					block.BlockComment = strings.Join(fileComments, "\n")
-				}
-			}
-		}
-	}
-
 	// Extract block comments and inline comments
 	blockComment, inlineComment := findAssociatedComments(node, content)
 	if blockComment != "" {
-		if block.BlockComment != "" {
-			block.BlockComment += "\n" + blockComment
-		} else {
-			block.BlockComment = blockComment
-		}
+		block.BlockComment = blockComment
 	}
 	block.InlineComment = inlineComment
 
-	// Special case for the module block to capture "// Yet another comment"
-	if node.ChildCount() > 3 && node.Child(0).Type() == "identifier" {
-		blockType := string(content[node.Child(0).StartByte():node.Child(0).EndByte()])
-		if blockType == "module" {
-			for i := 0; i < int(node.ChildCount()); i++ {
-				child := node.Child(i)
-				if child.Type() == "comment" {
-					commentText := string(content[child.StartByte():child.EndByte()])
-					if strings.Contains(commentText, "Yet another comment") {
-						block.InlineComment = strings.TrimSpace(commentText)
-						break
-					}
-				}
-			}
-		}
-	}
-
-	// Process the block's direct children to find identifier (type) and string_literals (labels)
-	var body *sitter.Node
-
-	// Debug the node structure - uncomment for debugging
-	/*
-		fmt.Printf("Block node at line %d has %d children\n",
-			node.StartPoint().Row+1, node.ChildCount())
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			fmt.Printf("  Child %d: Type=%s, Text=%q\n",
-				i, child.Type(), string(content[child.StartByte():child.EndByte()]))
-		}
-	*/
-
+	// Create a tree-sitter cursor
 	cursor := sitter.NewTreeCursor(node)
 	defer cursor.Close()
 
@@ -553,396 +597,130 @@ func parseBlock(node *sitter.Node, content []byte) (types.Body, error) {
 			return nil, fmt.Errorf("block at line %d doesn't start with an identifier", node.StartPoint().Row+1)
 		}
 
-		// Process the rest of the children to find labels
+		// Process remaining children to extract labels and the block body
 		for cursor.GoToNextSibling() {
 			childNode := cursor.CurrentNode()
-			childType := childNode.Type()
-
-			// Look for string literals which are labels
-			if childType == "string_lit" {
+			switch childNode.Type() {
+			case "string_lit", "quoted_template":
 				labelText := string(content[childNode.StartByte():childNode.EndByte()])
 				// Remove quotes if present
-				if len(labelText) >= 2 && (labelText[0] == '"' || labelText[0] == '\'') && (labelText[len(labelText)-1] == '"' || labelText[len(labelText)-1] == '\'') {
-					labelText = labelText[1 : len(labelText)-1]
-				}
+				labelText = strings.Trim(labelText, "\"'")
 				block.Labels = append(block.Labels, labelText)
-				// Debug output - uncomment for debugging
-				// fmt.Printf("  Found label: %s\n", labelText)
-			} else if childType == "block_body" || childType == "body" {
-				// This is the body of the block
-				body = childNode
-				break
-			}
-		}
+			case "body":
+				// Parse the block body
+				bodyCursor := sitter.NewTreeCursor(childNode)
+				defer bodyCursor.Close()
 
-		// Process the rest of the children
-		for cursor.GoToNextSibling() {
-			childNode := cursor.CurrentNode()
-			childType := childNode.Type()
+				if bodyCursor.GoToFirstChild() {
+					for {
+						bodyChildNode := bodyCursor.CurrentNode()
+						if bodyChildNode == nil {
+							break
+						}
 
-			switch childType {
-			case "string_literal", "quoted_template":
-				// These are labels
-				label := string(content[childNode.StartByte():childNode.EndByte()])
-				// Remove quotes if present
-				if len(label) >= 2 && (label[0] == '"' || label[0] == '\'') && (label[len(label)-1] == '"' || label[len(label)-1] == '\'') {
-					label = label[1 : len(label)-1]
+						// Skip comments and punctuation
+						if bodyChildNode.Type() == "comment" || bodyChildNode.Type() == "{" || bodyChildNode.Type() == "}" {
+							if !bodyCursor.GoToNextSibling() {
+								break
+							}
+							continue
+						}
+
+						var childBody types.Body
+						var err error
+
+						switch bodyChildNode.Type() {
+						case "block":
+							childBody, err = parseBlock(bodyChildNode, content)
+						case "attribute":
+							childBody, err = parseAttribute(bodyChildNode, content)
+						default:
+							// Try to parse as a generic node
+							childBody, err = parseNode(bodyChildNode, content)
+						}
+
+						if err != nil {
+							return nil, fmt.Errorf("error parsing block child: %w", err)
+						}
+
+						if childBody != nil {
+							block.Children = append(block.Children, childBody)
+						}
+
+						if !bodyCursor.GoToNextSibling() {
+							break
+						}
+					}
 				}
-				block.Labels = append(block.Labels, label)
-			case "block_body", "body":
-				// This is the body of the block
-				body = childNode
 			}
 		}
-
-		cursor.GoToParent()
 	} else {
 		return nil, fmt.Errorf("block at line %d has no children", node.StartPoint().Row+1)
-	}
-
-	// Process the block body if it exists
-	if body != nil {
-		bodyCursor := sitter.NewTreeCursor(body)
-		defer bodyCursor.Close()
-
-		if bodyCursor.GoToFirstChild() {
-			for {
-				childNode := bodyCursor.CurrentNode()
-
-				// Skip null nodes
-				if childNode == nil {
-					if !bodyCursor.GoToNextSibling() {
-						break
-					}
-					continue
-				}
-
-				// Parse each child node based on its type
-				childType := childNode.Type()
-				var childBody types.Body
-				var err error
-
-				switch childType {
-				case "block":
-					childBody, err = parseBlock(childNode, content)
-				case "attribute":
-					childBody, err = parseAttribute(childNode, content)
-				case "comment":
-					// Skip comments as they're already handled separately
-					if !bodyCursor.GoToNextSibling() {
-						break
-					}
-					continue
-				default:
-					// Try to parse as a generic node
-					childBody, err = parseNode(childNode, content)
-				}
-
-				if err != nil {
-					return nil, err
-				}
-
-				if childBody != nil {
-					block.Children = append(block.Children, childBody)
-				}
-
-				if !bodyCursor.GoToNextSibling() {
-					break
-				}
-			}
-			bodyCursor.GoToParent()
-		}
 	}
 
 	return block, nil
 }
 
-// parseAttribute parses an attribute node
-func parseAttribute(node *sitter.Node, content []byte) (*types.Attribute, error) {
-	debugPrint("Parsing attribute at line %d", node.StartPoint().Row+1)
-
-	// Find name and expression nodes
-	var nameNode, exprNode *sitter.Node
-
-	// Try to find child nodes by field name
-	nameNode = findChildByFieldName(node, "name")
-	exprNode = findChildByFieldName(node, "expression")
-
-	// If not found by field name, try to find them by position
-	if nameNode == nil && node.NamedChildCount() >= 1 {
-		nameNode = node.NamedChild(0)
+// parseAttribute converts a tree-sitter attribute node to our Attribute type
+func parseAttribute(node *sitter.Node, content []byte) (types.Body, error) {
+	if node == nil {
+		return nil, fmt.Errorf("nil node passed to parseAttribute")
 	}
 
-	if exprNode == nil && node.NamedChildCount() >= 2 {
-		exprNode = node.NamedChild(1)
+	// Get range information
+	nodeRange := sitter.Range{
+		StartPoint: node.StartPoint(),
+		EndPoint:   node.EndPoint(),
+		StartByte:  node.StartByte(),
+		EndByte:    node.EndByte(),
 	}
 
-	// Extract name
-	var attrName string
-	if nameNode != nil {
-		attrName = string(content[nameNode.StartByte():nameNode.EndByte()])
-	} else {
-		return nil, fmt.Errorf("attribute node missing name")
+	// Initialize the attribute with empty values
+	attr := &types.Attribute{
+		Name:  "",
+		Range: nodeRange,
 	}
 
-	// Parse the expression
-	var exprValue types.Expression
-	var err error
-
-	if exprNode != nil {
-		exprValue, err = parseExpression(exprNode, content)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing attribute expression: %v", err)
-		}
-	} else {
-		return nil, fmt.Errorf("attribute node missing expression")
-	}
-
-	// Find associated comments
+	// Extract attribute comments and inline comments
 	blockComment, inlineComment := findAssociatedComments(node, content)
+	if blockComment != "" {
+		attr.BlockComment = blockComment
+	}
+	attr.InlineComment = inlineComment
 
-	// For specific output handling with complex structure
-	fullNodeText := string(content[node.StartByte():node.EndByte()])
+	// Create a tree-sitter cursor
+	cursor := sitter.NewTreeCursor(node)
+	defer cursor.Close()
 
-	// Special handling for complex output blocks
-	if attrName == "value" && strings.Contains(fullNodeText, "vpc_id") && strings.Contains(fullNodeText, "subnet_ids") {
-		debugPrint("Detected complex output object at line %d", node.StartPoint().Row+1)
-
-		// Check if we're in an output block and this is a complex object
-		// Create a custom object expression for the output
-		objExpr := &types.ObjectExpr{
-			Items: []types.ObjectItem{},
-			ExprRange: sitter.Range{
-				StartPoint: exprNode.StartPoint(),
-				EndPoint:   exprNode.EndPoint(),
-				StartByte:  exprNode.StartByte(),
-				EndByte:    exprNode.EndByte(),
-			},
+	if cursor.GoToFirstChild() {
+		// First child should be the identifier (attribute name)
+		nameNode := cursor.CurrentNode()
+		if nameNode.Type() == "identifier" {
+			attr.Name = string(content[nameNode.StartByte():nameNode.EndByte()])
+		} else {
+			return nil, fmt.Errorf("attribute at line %d doesn't start with an identifier", node.StartPoint().Row+1)
 		}
 
-		// Extract value from text between braces
-		valueText := string(content[exprNode.StartByte():exprNode.EndByte()])
-		if strings.HasPrefix(valueText, "{") && strings.HasSuffix(valueText, "}") {
-			// Add expected items in the right order
-
-			// 1. vpc_id
-			if strings.Contains(valueText, "vpc_id") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"vpc_id"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"module", "complex_module", "vpc_id"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
+		// Move to the value
+		if cursor.GoToNextSibling() {
+			// Skip the equals token
+			if cursor.CurrentNode().Type() == "=" {
+				cursor.GoToNextSibling()
 			}
-
-			// 2. subnet_ids
-			if strings.Contains(valueText, "subnet_ids") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"subnet_ids"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"module", "complex_module", "subnet_ids"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
+			valueNode := cursor.CurrentNode()
+			if valueNode != nil {
+				value, err := parseExpression(valueNode, content)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing attribute value: %w", err)
+				}
+				attr.Value = value
 			}
-
-			// 3. security_group_id (security_group_ids in the file)
-			if strings.Contains(valueText, "security_group_ids") || strings.Contains(valueText, "security_group_id") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"security_group_id"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ArrayExpr{
-						Items: []types.Expression{
-							&types.ForExpr{
-								ValueVar:    "sg",
-								KeyVar:      "sg_key",
-								Collection:  &types.ReferenceExpr{Parts: []string{"aws_security_group", "complex"}},
-								ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"sg", "id"}},
-							},
-						},
-						ExprRange: exprRange(exprNode),
-					},
-				})
-			}
-
-			// 4. instance_details
-			if strings.Contains(valueText, "instance_details") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"instance_details"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ForExpr{
-						KeyVar:      "instance",
-						Collection:  &types.ReferenceExpr{Parts: []string{"local", "filtered_instances"}},
-						ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"instance", "id"}},
-						ThenValueExpr: &types.ObjectExpr{
-							Items: []types.ObjectItem{
-								{
-									Key:   &types.ReferenceExpr{Parts: []string{"name"}},
-									Value: &types.ReferenceExpr{Parts: []string{"instance", "name"}},
-								},
-								{
-									Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
-									Value: &types.ReferenceExpr{Parts: []string{"instance", "private_ip"}},
-								},
-								{
-									Key:   &types.ReferenceExpr{Parts: []string{"public_ip"}},
-									Value: &types.ReferenceExpr{Parts: []string{"instance", "public_ip"}},
-								},
-								{
-									Key: &types.ReferenceExpr{Parts: []string{"subnet"}},
-									Value: &types.ObjectExpr{
-										Items: []types.ObjectItem{
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-												Value: &types.ReferenceExpr{Parts: []string{"instance", "subnet_id"}},
-											},
-											{
-												Key: &types.ReferenceExpr{Parts: []string{"details"}},
-												Value: &types.FunctionCallExpr{
-													Name: "lookup",
-													Args: []types.Expression{
-														&types.ReferenceExpr{Parts: []string{"local", "subnet_map"}},
-														&types.ReferenceExpr{Parts: []string{"instance", "subnet_id"}},
-														&types.LiteralValue{Value: nil, ValueType: "null"},
-													},
-												},
-											},
-										},
-									},
-								},
-								{
-									Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
-									Value: &types.ReferenceExpr{Parts: []string{"instance", "environment"}},
-								},
-								{
-									Key:   &types.ReferenceExpr{Parts: []string{"type"}},
-									Value: &types.ReferenceExpr{Parts: []string{"instance", "type"}},
-								},
-								{
-									Key:   &types.ReferenceExpr{Parts: []string{"tags"}},
-									Value: &types.ReferenceExpr{Parts: []string{"instance", "tags"}},
-								},
-							},
-						},
-					},
-				})
-			}
-
-			// 5. backup_enabled
-			if strings.Contains(valueText, "backup_enabled") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"backup_enabled"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"var", "enable_backups"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
-			}
-
-			// 6. backup_config
-			if strings.Contains(valueText, "backup_config") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"backup_config"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"var", "backup_config"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
-			}
-
-			// 7. naming_convention
-			if strings.Contains(valueText, "naming_convention") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"naming_convention"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"local", "naming_convention"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
-			}
-
-			// 8. complex_calculation
-			if strings.Contains(valueText, "complex_calculation") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"complex_calculation"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"module", "complex_module", "complex_calculation"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
-			}
-
-			// 9. policy_document
-			if strings.Contains(valueText, "policy_document") {
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key: &types.ReferenceExpr{
-						Parts:     []string{"policy_document"},
-						ExprRange: exprRange(exprNode),
-					},
-					Value: &types.ReferenceExpr{
-						Parts:     []string{"data", "aws_iam_policy_document", "complex", "json"},
-						ExprRange: exprRange(exprNode),
-					},
-				})
-			}
-
-			// Use this object instead of the parsed one
-			exprValue = objExpr
 		}
-	} else if attrName == "depends_on" && strings.Contains(fullNodeText, "module.complex_module") {
-		// Special handling for depends_on attributes in complex outputs
-		arrayExpr := &types.ArrayExpr{
-			Items: []types.Expression{
-				&types.ReferenceExpr{
-					Parts:     []string{"module", "complex_module"},
-					ExprRange: exprRange(exprNode),
-				},
-				&types.ReferenceExpr{
-					Parts:     []string{"aws_security_group", "complex"},
-					ExprRange: exprRange(exprNode),
-				},
-				&types.ReferenceExpr{
-					Parts:     []string{"data", "aws_iam_policy_document", "complex"},
-					ExprRange: exprRange(exprNode),
-				},
-			},
-			ExprRange: exprRange(exprNode),
-		}
-
-		// Use this array instead of the parsed one
-		exprValue = arrayExpr
+	} else {
+		return nil, fmt.Errorf("attribute at line %d has no children", node.StartPoint().Row+1)
 	}
 
-	// Create the attribute
-	return &types.Attribute{
-		Name:          attrName,
-		Value:         exprValue,
-		BlockComment:  blockComment,
-		InlineComment: inlineComment,
-	}, nil
+	return attr, nil
 }
 
 // Helper function to create an expression range from a node
@@ -955,1071 +733,621 @@ func exprRange(node *sitter.Node) sitter.Range {
 	}
 }
 
-// parseExpression parses an expression node using the tree-sitter node structure
-func parseExpression(node *sitter.Node, content []byte) (types.Expression, error) {
-	// Add debugging information
-	nodeText := string(content[node.StartByte():node.EndByte()])
-	debugPrint("parseExpression - type: %s, line: %d, text: %q",
-		node.Type(), node.StartPoint().Row+1, truncateString(nodeText, 50))
+// findAssociatedComments extracts block and inline comments associated with a node
+func findAssociatedComments(node *sitter.Node, content []byte) (string, string) {
+	var blockComment, inlineComment string
 
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
+	// Look for comments before the node
+	if node.PrevSibling() != nil && node.PrevSibling().Type() == "comment" {
+		blockComment = string(content[node.PrevSibling().StartByte():node.PrevSibling().EndByte()])
 	}
 
-	// Handle different node types
+	// Look for comments after the node on the same line
+	if node.NextSibling() != nil && node.NextSibling().Type() == "comment" {
+		inlineComment = string(content[node.NextSibling().StartByte():node.NextSibling().EndByte()])
+	}
+
+	return blockComment, inlineComment
+}
+
+// parseExpression converts a tree-sitter expression node to our Expression type
+func parseExpression(node *sitter.Node, content []byte) (types.Expression, error) {
+	if debugEnabled {
+		log.Printf("Parsing expression node type: %s, text: %s, child count: %d", node.Type(), node.Content(content), node.NamedChildCount())
+		for i := uint32(0); i < node.NamedChildCount(); i++ {
+			child := node.NamedChild(int(i))
+			log.Printf("  Child %d: type=%s, text=%s", i, child.Type(), child.Content(content))
+		}
+	}
+
 	switch node.Type() {
 	case "expression":
-		// If this is a container node, look at its first child
 		if node.NamedChildCount() > 0 {
 			return parseExpression(node.NamedChild(0), content)
 		}
-		// If no children, return an error
 		return nil, fmt.Errorf("empty expression node")
-
-	case "object", "object_cons":
-		// Parse as an object expression
-		return parseObjectExpr(node, content)
-
-	case "array", "tuple", "tuple_cons":
-		// Parse as an array expression
-		return parseArrayExpr(node, content)
-
-	case "variable_expr", "scope_traversal", "get_attr":
-		// Parse as a reference expression (variable or attribute access)
-		return parseReferenceExpr(node, content)
-
+	case "operation":
+		if node.NamedChildCount() > 0 {
+			return parseExpression(node.NamedChild(0), content)
+		}
+		return nil, fmt.Errorf("empty operation node")
+	case "binary_operation":
+		if node.NamedChildCount() < 3 {
+			return nil, fmt.Errorf("binary operation must have at least 3 children")
+		}
+		left, err := parseExpression(node.NamedChild(0), content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse left operand: %w", err)
+		}
+		operator := node.NamedChild(1).Content(content)
+		right, err := parseExpression(node.NamedChild(2), content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse right operand: %w", err)
+		}
+		return &types.BinaryExpr{
+			Left:      left,
+			Operator:  operator,
+			Right:     right,
+			ExprRange: exprRange(node),
+		}, nil
+	case "string_lit":
+		return parseStringLiteral(node, content)
+	case "literal_value":
+		return parseLiteralValue(node, content)
+	case "collection_value":
+		return parseCollectionValue(node, content)
+	case "variable_expr":
+		return parseVariableExpr(node, content)
+	case "get_attr":
+		return parseGetAttr(node, content)
 	case "function_call":
-		// Parse as a function call
-		return parseFunctionCallExpr(node, content)
-
-	case "for_expr", "for":
-		// Parse as a for expression
+		return parseFunctionCall(node, content)
+	case "template_expr":
+		return parseTemplateExpr(node, content)
+	case "binary_expr":
+		return parseBinaryExpr(node, content)
+	case "paren_expr":
+		return parseParenExpr(node, content)
+	case "for_expr":
 		return parseForExpr(node, content)
-
-	case "conditional", "conditional_expr":
-		// Parse as a conditional expression
+	case "conditional_expr":
 		return parseConditionalExpr(node, content)
-
-	case "literal_value", "string_lit", "numeric_lit":
-		text := string(content[node.StartByte():node.EndByte()])
-		if strings.HasPrefix(text, "\"") && strings.HasSuffix(text, "\"") && len(text) >= 2 {
-			// String literal
-			return &types.LiteralValue{
-				Value:     text[1 : len(text)-1],
-				ValueType: "string",
-				ExprRange: exprRange,
-			}, nil
-		} else if text == "true" {
-			// Boolean true
-			return &types.LiteralValue{
-				Value:     true,
-				ValueType: "bool",
-				ExprRange: exprRange,
-			}, nil
-		} else if text == "false" {
-			// Boolean false
-			return &types.LiteralValue{
-				Value:     false,
-				ValueType: "bool",
-				ExprRange: exprRange,
-			}, nil
-		} else if text == "null" {
-			// Null literal
-			return &types.LiteralValue{
-				Value:     nil,
-				ValueType: "null",
-				ExprRange: exprRange,
-			}, nil
-		} else {
-			// Try to parse as a number, fall back to string
-			return &types.LiteralValue{
-				Value:     text,
-				ValueType: "string",
-				ExprRange: exprRange,
-			}, nil
+	case "conditional":
+		if node.NamedChildCount() < 3 {
+			return nil, fmt.Errorf("conditional must have at least 3 children")
 		}
-
+		condition, err := parseExpression(node.NamedChild(0), content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse condition: %w", err)
+		}
+		trueExpr, err := parseExpression(node.NamedChild(1), content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse true expression: %w", err)
+		}
+		falseExpr, err := parseExpression(node.NamedChild(2), content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse false expression: %w", err)
+		}
+		return &types.ConditionalExpr{
+			Condition:  condition,
+			TrueExpr:   trueExpr,
+			FalseExpr:  falseExpr,
+			ExprRange:  exprRange(node),
+		}, nil
 	default:
-		// Fallback - check the content to guess the expression type
-		text := string(content[node.StartByte():node.EndByte()])
+		return nil, fmt.Errorf("unsupported expression type: %s", node.Type())
+	}
+}
 
-		// Check for object
-		if strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}") {
-			objExpr := &types.ObjectExpr{
-				Items:     []types.ObjectItem{},
-				ExprRange: exprRange,
-			}
+func parseBinaryExpr(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 3 {
+		return nil, fmt.Errorf("binary expression must have at least 3 children")
+	}
 
-			// Try to extract some key-value pairs from the text
-			// This is a simple implementation just to get the test passing
-			content := strings.TrimSpace(text[1 : len(text)-1])
-			for _, line := range strings.Split(content, "\n") {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "//") {
-					continue
-				}
+	left, err := parseExpression(node.NamedChild(0), content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse left operand: %w", err)
+	}
 
-				// Check for key = value pattern
-				if idx := strings.Index(line, "="); idx > 0 {
-					key := strings.TrimSpace(line[:idx])
-					value := strings.TrimSpace(line[idx+1:])
+	operator := node.NamedChild(1).Content(content)
 
-					// Remove trailing comma if present
-					if strings.HasSuffix(value, ",") {
-						value = value[:len(value)-1]
-					}
+	right, err := parseExpression(node.NamedChild(2), content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse right operand: %w", err)
+	}
 
-					// Add to object items
-					objExpr.Items = append(objExpr.Items, types.ObjectItem{
-						Key: &types.LiteralValue{
-							Value:     key,
-							ValueType: "string",
-							ExprRange: exprRange,
-						},
-						Value: &types.LiteralValue{
-							Value:     value,
-							ValueType: "string",
-							ExprRange: exprRange,
-						},
-					})
-				}
-			}
+	return &types.BinaryExpr{
+		Left:      left,
+		Operator:  operator,
+		Right:     right,
+		ExprRange: exprRange(node),
+	}, nil
+}
 
-			return objExpr, nil
+func parseParenExpr(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 1 {
+		return nil, fmt.Errorf("parenthesized expression must have at least 1 child")
+	}
+
+	expr, err := parseExpression(node.NamedChild(0), content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse inner expression: %w", err)
+	}
+
+	return &types.ParenExpr{
+		Expression: expr,
+		ExprRange: exprRange(node),
+	}, nil
+}
+
+func parseForExpr(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 1 {
+		return nil, fmt.Errorf("for expression must have at least 1 child")
+	}
+
+	// Find the for_tuple_expr or for_object_expr node
+	var forNode *sitter.Node
+	for i := uint32(0); i < node.NamedChildCount(); i++ {
+		child := node.NamedChild(int(i))
+		if child.Type() == "for_tuple_expr" || child.Type() == "for_object_expr" {
+			forNode = child
+			break
 		}
+	}
 
-		// Check for array
-		if strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]") {
-			arrayExpr := &types.ArrayExpr{
-				Items:     []types.Expression{},
-				ExprRange: exprRange,
-			}
+	if forNode == nil {
+		return nil, fmt.Errorf("for expression missing tuple or object expression")
+	}
 
-			// Extract items from the text
-			content := strings.TrimSpace(text[1 : len(text)-1])
-			if content != "" {
-				lines := strings.Split(content, "\n")
-				for _, line := range lines {
-					line = strings.TrimSpace(line)
-					if line == "" || strings.HasPrefix(line, "//") {
-						continue
-					}
+	var keyVar, valueVar string
+	var collection, condition types.Expression
+	var thenKeyExpr, thenValueExpr types.Expression
 
-					// Remove trailing comma if present
-					if strings.HasSuffix(line, ",") {
-						line = line[:len(line)-1]
-					}
-
-					// If it looks like a reference, parse it as such
-					if strings.Contains(line, ".") {
-						parts := strings.Split(line, ".")
-						for i := range parts {
-							parts[i] = strings.TrimSpace(parts[i])
-						}
-
-						arrayExpr.Items = append(arrayExpr.Items, &types.ReferenceExpr{
-							Parts:     parts,
-							ExprRange: exprRange,
-						})
+	// Parse the for expression parts
+	for i := uint32(0); i < forNode.NamedChildCount(); i++ {
+		child := forNode.NamedChild(int(i))
+		switch child.Type() {
+		case "for_intro":
+			// Parse key and value variables
+			for j := uint32(0); j < child.NamedChildCount(); j++ {
+				introChild := child.NamedChild(int(j))
+				if introChild.Type() == "identifier" {
+					if valueVar == "" {
+						valueVar = introChild.Content(content)
 					} else {
-						// Add as a string literal
-						arrayExpr.Items = append(arrayExpr.Items, &types.LiteralValue{
-							Value:     line,
-							ValueType: "string",
-							ExprRange: exprRange,
-						})
+						keyVar = valueVar
+						valueVar = introChild.Content(content)
 					}
 				}
 			}
-
-			return arrayExpr, nil
-		}
-
-		// Check for reference (contains dots)
-		if strings.Contains(text, ".") && !strings.HasPrefix(text, "\"") {
-			parts := strings.Split(text, ".")
-			for i := range parts {
-				parts[i] = strings.TrimSpace(parts[i])
+		case "expression":
+			// Parse collection and result expressions
+			if collection == nil {
+				var err error
+				collection, err = parseExpression(child, content)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse collection: %w", err)
+				}
+			} else {
+				// This is the result expression
+				if forNode.Type() == "for_tuple_expr" {
+					var err error
+					thenValueExpr, err = parseExpression(child, content)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse then value expression: %w", err)
+					}
+				} else {
+					// For object expressions, we need both key and value expressions
+					if child.NamedChildCount() >= 2 {
+						var err error
+						thenKeyExpr, err = parseExpression(child.NamedChild(0), content)
+						if err != nil {
+							return nil, fmt.Errorf("failed to parse then key expression: %w", err)
+						}
+						thenValueExpr, err = parseExpression(child.NamedChild(1), content)
+						if err != nil {
+							return nil, fmt.Errorf("failed to parse then value expression: %w", err)
+						}
+					}
+				}
 			}
+		case "binary_operation":
+			// This might be the condition
+			var err error
+			condition, err = parseBinaryExpr(child, content)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse condition: %w", err)
+			}
+		}
+	}
 
-			return &types.ReferenceExpr{
-				Parts:     parts,
-				ExprRange: exprRange,
+	return &types.ForExpr{
+		KeyVar:       keyVar,
+		ValueVar:     valueVar,
+		Collection:   collection,
+		Condition:    condition,
+		ThenKeyExpr:  thenKeyExpr,
+		ThenValueExpr: thenValueExpr,
+		ExprRange:    exprRange(node),
+	}, nil
+}
+
+func parseConditionalExpr(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 3 {
+		return nil, fmt.Errorf("conditional expression must have at least 3 children")
+	}
+
+	condition, err := parseExpression(node.NamedChild(0), content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse condition: %w", err)
+	}
+
+	trueExpr, err := parseExpression(node.NamedChild(1), content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse true expression: %w", err)
+	}
+
+	falseExpr, err := parseExpression(node.NamedChild(2), content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse false expression: %w", err)
+	}
+
+	return &types.ConditionalExpr{
+		Condition:  condition,
+		TrueExpr:   trueExpr,
+		FalseExpr:  falseExpr,
+		ExprRange:  exprRange(node),
+	}, nil
+}
+
+func parseFunctionCall(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 2 {
+		return nil, fmt.Errorf("function call must have at least 2 children")
+	}
+
+	nameNode := node.NamedChild(0)
+	if nameNode == nil || nameNode.Type() != "identifier" {
+		return nil, fmt.Errorf("function call must have an identifier as its first child")
+	}
+
+	args := make([]types.Expression, 0)
+	for i := uint32(1); i < node.NamedChildCount(); i++ {
+		arg := node.NamedChild(int(i))
+		if expr, err := parseExpression(arg, content); err == nil {
+			args = append(args, expr)
+		}
+	}
+
+	return &types.FunctionCallExpr{
+		Name:      nameNode.Content(content),
+		Args:      args,
+		ExprRange: exprRange(node),
+	}, nil
+}
+
+func parseStringLiteral(node *sitter.Node, content []byte) (types.Expression, error) {
+	text := node.Content(content)
+	// Strip quotes from string literals
+	if len(text) >= 2 && text[0] == '"' && text[len(text)-1] == '"' {
+		text = text[1 : len(text)-1]
+	}
+	return &types.LiteralValue{
+		Value:     text,
+		ValueType: "string",
+		ExprRange: exprRange(node),
+	}, nil
+}
+
+func parseLiteralValue(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 1 {
+		return nil, fmt.Errorf("literal value node has no children")
+	}
+
+	firstChild := node.NamedChild(0)
+	nodeType := firstChild.Type()
+	nodeContent := firstChild.Content(content)
+
+	switch nodeType {
+	case "string_lit":
+		// Strip quotes from string literals
+		value := strings.Trim(nodeContent, "\"")
+		return &types.LiteralValue{
+			Value:     value,
+			ValueType: "string",
+			ExprRange: exprRange(node),
+		}, nil
+	case "bool_lit":
+		value := nodeContent == "true"
+		return &types.LiteralValue{
+			Value:     value,
+			ValueType: "bool",
+			ExprRange: exprRange(node),
+		}, nil
+	case "null_lit":
+		return &types.LiteralValue{
+			Value:     nil,
+			ValueType: "null",
+			ExprRange: exprRange(node),
+		}, nil
+	default:
+		// Try to parse as number, if fails return as string
+		if val, err := strconv.ParseFloat(nodeContent, 64); err == nil {
+			return &types.LiteralValue{
+				Value:     val,
+				ValueType: "number",
+				ExprRange: exprRange(node),
 			}, nil
 		}
-
-		// Default fallback
 		return &types.LiteralValue{
-			Value:     text,
+			Value:     nodeContent,
 			ValueType: "string",
-			ExprRange: exprRange,
+			ExprRange: exprRange(node),
 		}, nil
 	}
 }
 
-// parseForExpr parses a for expression from a tree-sitter node
-func parseForExpr(node *sitter.Node, content []byte) (*types.ForExpr, error) {
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
+func parseCollectionValue(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 1 {
+		return nil, fmt.Errorf("collection value node has no children")
 	}
 
-	// Create a basic for expression
-	forExpr := &types.ForExpr{
-		ExprRange: exprRange,
-	}
+	firstChild := node.NamedChild(0)
+	nodeType := firstChild.Type()
 
-	// Extract the full text to help with parsing
-	text := string(content[node.StartByte():node.EndByte()])
-
-	// Try to identify parts of the for expression from the text
-	if strings.Contains(text, "for") && strings.Contains(text, "in") {
-		// Simple parsing for test purposes only
-		forInMatch := strings.Index(text, "in")
-		if forInMatch > 0 {
-			// Extract the variable part
-			varPart := strings.TrimSpace(text[3:forInMatch])
-
-			// Check if we have one or two variables
-			if strings.Contains(varPart, ",") {
-				// Format: for k, v in collection
-				parts := strings.Split(varPart, ",")
-				if len(parts) >= 2 {
-					forExpr.KeyVar = strings.TrimSpace(parts[0])
-					forExpr.ValueVar = strings.TrimSpace(parts[1])
-				}
-			} else {
-				// Format: for v in collection
-				forExpr.ValueVar = varPart
+	switch nodeType {
+	case "[", "tuple":
+		items := make([]types.Expression, 0)
+		for i := uint32(0); i < firstChild.NamedChildCount(); i++ {
+			child := firstChild.NamedChild(int(i))
+			if expr, err := parseExpression(child, content); err == nil {
+				items = append(items, expr)
 			}
-
-			// Find the collection part
-			colStart := forInMatch + 2 // Skip "in"
-			colEnd := strings.Index(text[colStart:], ":")
-			if colEnd > 0 {
-				colText := strings.TrimSpace(text[colStart : colStart+colEnd])
-
-				// Create a reference for the collection
-				if strings.Contains(colText, ".") {
-					parts := strings.Split(colText, ".")
-					for i := range parts {
-						parts[i] = strings.TrimSpace(parts[i])
+		}
+		return &types.ArrayExpr{
+			Items:     items,
+			ExprRange: exprRange(node),
+		}, nil
+	case "{", "object":
+		items := make([]types.ObjectItem, 0)
+		for i := uint32(0); i < firstChild.NamedChildCount(); i++ {
+			child := firstChild.NamedChild(int(i))
+			if child.Type() == "object_elem" {
+				key := child.NamedChild(0)
+				value := child.NamedChild(1)
+				if key != nil && value != nil {
+					keyExpr, err := parseExpression(key, content)
+					if err != nil {
+						continue
 					}
-
-					forExpr.Collection = &types.ReferenceExpr{
-						Parts:     parts,
-						ExprRange: exprRange,
+					valueExpr, err := parseExpression(value, content)
+					if err != nil {
+						continue
 					}
-				} else {
-					forExpr.Collection = &types.ReferenceExpr{
-						Parts:     []string{colText},
-						ExprRange: exprRange,
-					}
-				}
-
-				// Try to find the value part
-				valStart := colStart + colEnd + 1 // Skip ":"
-				valText := strings.TrimSpace(text[valStart:])
-
-				if strings.Contains(valText, "=>") {
-					// Map form with key => value
-					mapParts := strings.Split(valText, "=>")
-					if len(mapParts) >= 2 {
-						keyText := strings.TrimSpace(mapParts[0])
-						valueText := strings.TrimSpace(mapParts[1])
-
-						// Add key expression
-						if strings.Contains(keyText, ".") {
-							parts := strings.Split(keyText, ".")
-							for i := range parts {
-								parts[i] = strings.TrimSpace(parts[i])
-							}
-
-							forExpr.ThenKeyExpr = &types.ReferenceExpr{
-								Parts:     parts,
-								ExprRange: exprRange,
-							}
-						} else {
-							forExpr.ThenKeyExpr = &types.LiteralValue{
-								Value:     keyText,
-								ValueType: "string",
-								ExprRange: exprRange,
-							}
-						}
-
-						// Add value expression
-						if strings.HasPrefix(valueText, "{") && strings.HasSuffix(valueText, "}") {
-							// Object value
-							forExpr.ThenValueExpr = &types.ObjectExpr{
-								Items:     []types.ObjectItem{},
-								ExprRange: exprRange,
-							}
-						} else if strings.Contains(valueText, ".") {
-							parts := strings.Split(valueText, ".")
-							for i := range parts {
-								parts[i] = strings.TrimSpace(parts[i])
-							}
-
-							forExpr.ThenValueExpr = &types.ReferenceExpr{
-								Parts:     parts,
-								ExprRange: exprRange,
-							}
-						} else {
-							forExpr.ThenValueExpr = &types.LiteralValue{
-								Value:     valueText,
-								ValueType: "string",
-								ExprRange: exprRange,
-							}
-						}
-					}
-				} else {
-					// Simple value
-					if strings.Contains(valText, ".") {
-						parts := strings.Split(valText, ".")
-						for i := range parts {
-							parts[i] = strings.TrimSpace(parts[i])
-						}
-
-						forExpr.ThenKeyExpr = &types.ReferenceExpr{
-							Parts:     parts,
-							ExprRange: exprRange,
-						}
-					} else {
-						forExpr.ThenKeyExpr = &types.LiteralValue{
-							Value:     valText,
-							ValueType: "string",
-							ExprRange: exprRange,
-						}
-					}
+					items = append(items, types.ObjectItem{
+						Key:   keyExpr,
+						Value: valueExpr,
+					})
 				}
 			}
 		}
+		return &types.ObjectExpr{
+			Items:     items,
+			ExprRange: exprRange(node),
+		}, nil
+	default:
+		// If not a collection, treat as a literal value
+		return parseLiteralValue(node, content)
 	}
-
-	return forExpr, nil
 }
 
-// parseConditionalExpr parses a conditional expression from a tree-sitter node
-func parseConditionalExpr(node *sitter.Node, content []byte) (*types.ConditionalExpr, error) {
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
+func parseVariableExpr(node *sitter.Node, content []byte) (types.Expression, error) {
+	// First, handle the identifier in the current node
+	if node.ChildCount() == 0 {
+		return nil, fmt.Errorf("variable expression node has no children")
 	}
 
-	// Create a basic conditional expression
-	condExpr := &types.ConditionalExpr{
-		ExprRange: exprRange,
+	firstChild := node.Child(0)
+	if firstChild.Type() != "identifier" {
+		return nil, fmt.Errorf("variable expression must start with an identifier")
 	}
 
-	// Try to find condition, true expression, and false expression
-	condNode := findChildByFieldName(node, "condition")
-	trueNode := findChildByFieldName(node, "true_val")
-	falseNode := findChildByFieldName(node, "false_val")
+	// Get the initial identifier
+	parts := []string{firstChild.Content(content)}
 
-	// If not found by field names, try to find them by position
-	if condNode == nil && node.NamedChildCount() >= 1 {
-		condNode = node.NamedChild(0)
+	// Check if this is part of a traversal
+	current := node.NextNamedSibling()
+	if current == nil {
+		// If there are no siblings, this is a simple reference
+		return &types.ReferenceExpr{
+			Parts:     parts,
+			ExprRange: exprRange(node),
+		}, nil
 	}
 
-	if trueNode == nil && node.NamedChildCount() >= 2 {
-		trueNode = node.NamedChild(1)
+	// Build traversal elements
+	var traversal []types.TraversalElem
+	source := &types.ReferenceExpr{
+		Parts:     parts,
+		ExprRange: exprRange(node),
 	}
 
-	if falseNode == nil && node.NamedChildCount() >= 3 {
-		falseNode = node.NamedChild(2)
-	}
-
-	// Parse condition
-	if condNode != nil {
-		condition, err := parseExpression(condNode, content)
-		if err == nil {
-			condExpr.Condition = condition
-		}
-	}
-
-	// Parse true expression
-	if trueNode != nil {
-		trueExpr, err := parseExpression(trueNode, content)
-		if err == nil {
-			condExpr.TrueExpr = trueExpr
-		}
-	}
-
-	// Parse false expression
-	if falseNode != nil {
-		falseExpr, err := parseExpression(falseNode, content)
-		if err == nil {
-			condExpr.FalseExpr = falseExpr
-		}
-	}
-
-	return condExpr, nil
-}
-
-// parseObjectExpr parses an object expression from a tree-sitter node
-func parseObjectExpr(node *sitter.Node, content []byte) (*types.ObjectExpr, error) {
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
-	}
-
-	// Create an object expression with empty items
-	objExpr := &types.ObjectExpr{
-		Items:     []types.ObjectItem{},
-		ExprRange: exprRange,
-	}
-
-	// Find all object items
-	for i := 0; i < int(node.NamedChildCount()); i++ {
-		childNode := node.NamedChild(int(i))
-
-		// Skip non-item children
-		if childNode.Type() != "object_elem" && childNode.Type() != "pair" {
-			continue
-		}
-
-		// Try to find by field names first
-		keyNode := findChildByFieldName(childNode, "key")
-		valueNode := findChildByFieldName(childNode, "value")
-
-		// If not found by field names, try to find by position
-		if keyNode == nil && childNode.NamedChildCount() >= 1 {
-			keyNode = childNode.NamedChild(0)
-		}
-
-		if valueNode == nil && childNode.NamedChildCount() >= 2 {
-			valueNode = childNode.NamedChild(1)
-		}
-
-		// Parse key
-		if keyNode == nil {
-			continue
-		}
-
-		keyText := string(content[keyNode.StartByte():keyNode.EndByte()])
-		keyExpr := &types.LiteralValue{
-			Value:     strings.Trim(keyText, "\""),
-			ValueType: "string",
-			ExprRange: sitter.Range{
-				StartPoint: keyNode.StartPoint(),
-				EndPoint:   keyNode.EndPoint(),
-				StartByte:  keyNode.StartByte(),
-				EndByte:    keyNode.EndByte(),
-			},
-		}
-
-		// Parse value
-		var valueExpr types.Expression
-		var err error
-
-		if valueNode != nil {
-			valueExpr, err = parseExpression(valueNode, content)
-			if err != nil {
-				// If we can't parse the value, create a simple literal
-				valueText := string(content[valueNode.StartByte():valueNode.EndByte()])
-				valueExpr = &types.LiteralValue{
-					Value:     valueText,
-					ValueType: "string",
-					ExprRange: sitter.Range{
-						StartPoint: valueNode.StartPoint(),
-						EndPoint:   valueNode.EndPoint(),
-						StartByte:  valueNode.StartByte(),
-						EndByte:    valueNode.EndByte(),
-					},
-				}
+	for current != nil {
+		switch current.Type() {
+		case "get_attr":
+			// Skip the leading dot and add the attribute name
+			attrName := current.Content(content)
+			if strings.HasPrefix(attrName, ".") {
+				attrName = attrName[1:]
 			}
-		} else {
-			// If no value node, create a null value
-			valueExpr = &types.LiteralValue{
-				Value:     nil,
-				ValueType: "null",
-				ExprRange: exprRange,
-			}
-		}
-
-		// Add to object items
-		objExpr.Items = append(objExpr.Items, types.ObjectItem{
-			Key:   keyExpr,
-			Value: valueExpr,
-		})
-	}
-
-	// If no items were found, try to parse from text
-	if len(objExpr.Items) == 0 {
-		text := string(content[node.StartByte():node.EndByte()])
-
-		// Check if it's an object expression
-		if strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}") {
-			content := strings.TrimSpace(text[1 : len(text)-1])
-
-			// Split content by commas, but be careful about nested structures
-			var items []string
-			depth := 0
-			start := 0
-
-			for i, c := range content {
-				switch c {
-				case '{', '[', '(':
-					depth++
-				case '}', ']', ')':
-					depth--
-				case ',':
-					if depth == 0 {
-						items = append(items, content[start:i])
-						start = i + 1
-					}
-				}
-			}
-
-			// Add the last item
-			if start < len(content) {
-				items = append(items, content[start:])
-			}
-
-			// Process each item
-			for _, item := range items {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-
-				// Split by "=" or ":"
-				var keyStr, valueStr string
-				equalIdx := strings.Index(item, "=")
-				colonIdx := strings.Index(item, ":")
-
-				if equalIdx > 0 {
-					keyStr = strings.TrimSpace(item[:equalIdx])
-					valueStr = strings.TrimSpace(item[equalIdx+1:])
-				} else if colonIdx > 0 {
-					keyStr = strings.TrimSpace(item[:colonIdx])
-					valueStr = strings.TrimSpace(item[colonIdx+1:])
-				} else {
-					// Invalid format, skip
-					continue
-				}
-
-				// Create key expression
-				keyExpr := &types.LiteralValue{
-					Value:     strings.Trim(keyStr, "\""),
-					ValueType: "string",
-					ExprRange: exprRange,
-				}
-
-				// Create value expression
-				var valueExpr types.Expression
-
-				// Try to determine value type
-				if strings.HasPrefix(valueStr, "{") && strings.HasSuffix(valueStr, "}") {
-					// Nested object
-					nestedObj, _ := parseObjectFromText(valueStr, exprRange)
-					valueExpr = nestedObj
-				} else if strings.HasPrefix(valueStr, "[") && strings.HasSuffix(valueStr, "]") {
-					// Array
-					nestedArray, _ := parseArrayFromText(valueStr, exprRange)
-					valueExpr = nestedArray
-				} else if strings.Contains(valueStr, ".") && !strings.HasPrefix(valueStr, "\"") {
-					// Reference
-					parts := strings.Split(valueStr, ".")
-					for i := range parts {
-						parts[i] = strings.TrimSpace(parts[i])
-					}
-
-					valueExpr = &types.ReferenceExpr{
-						Parts:     parts,
-						ExprRange: exprRange,
-					}
-				} else {
-					// Literal value
-					valueExpr = &types.LiteralValue{
-						Value:     strings.Trim(valueStr, "\""),
+			traversal = append(traversal, types.TraversalElem{
+				Type: "attr",
+				Name: attrName,
+			})
+		case "index":
+			// Handle index expressions
+			if current.ChildCount() > 0 {
+				indexChild := current.Child(0)
+				var indexExpr types.Expression
+				var err error
+				if indexChild.Type() == "string_lit" {
+					// Strip quotes from string literals
+					indexValue := strings.Trim(indexChild.Content(content), "\"")
+					indexExpr = &types.LiteralValue{
+						Value:     indexValue,
 						ValueType: "string",
-						ExprRange: exprRange,
+						ExprRange: exprRange(indexChild),
+					}
+				} else {
+					indexExpr = &types.LiteralValue{
+						Value:     indexChild.Content(content),
+						ValueType: "string",
+						ExprRange: exprRange(indexChild),
 					}
 				}
-
-				// Add to object items
-				objExpr.Items = append(objExpr.Items, types.ObjectItem{
-					Key:   keyExpr,
-					Value: valueExpr,
+				traversal = append(traversal, types.TraversalElem{
+					Type:  "index",
+					Index: indexExpr,
 				})
 			}
 		}
+		current = current.NextNamedSibling()
 	}
 
-	return objExpr, nil
+	// If we have traversal elements, return a RelativeTraversalExpr
+	if len(traversal) > 0 {
+		return &types.RelativeTraversalExpr{
+			Source:    source,
+			Traversal: traversal,
+			ExprRange: exprRange(node),
+		}, nil
+	}
+
+	// Otherwise, return the reference expression
+	return source, nil
 }
 
-// parseArrayExpr parses an array expression from a tree-sitter node
-func parseArrayExpr(node *sitter.Node, content []byte) (*types.ArrayExpr, error) {
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
-	}
-
-	// Create an array expression with empty items
-	arrayExpr := &types.ArrayExpr{
-		Items:     []types.Expression{},
-		ExprRange: exprRange,
-	}
-
-	// Find all array items
-	for i := 0; i < int(node.NamedChildCount()); i++ {
-		childNode := node.NamedChild(int(i))
-
-		// Parse the item
-		itemExpr, err := parseExpression(childNode, content)
-		if err != nil {
-			// If we can't parse the item, create a simple literal
-			itemText := string(content[childNode.StartByte():childNode.EndByte()])
-			itemExpr = &types.LiteralValue{
-				Value:     itemText,
-				ValueType: "string",
-				ExprRange: sitter.Range{
-					StartPoint: childNode.StartPoint(),
-					EndPoint:   childNode.EndPoint(),
-					StartByte:  childNode.StartByte(),
-					EndByte:    childNode.EndByte(),
-				},
+func parseGetAttr(node *sitter.Node, content []byte) (types.Expression, error) {
+	// First, check if we're part of a variable expression
+	var source types.Expression
+	current := node.Parent()
+	for current != nil {
+		if current.Type() == "variable_expr" {
+			if current.ChildCount() > 0 {
+				firstChild := current.Child(0)
+				if firstChild.Type() == "identifier" {
+					source = &types.ReferenceExpr{
+						Parts:     []string{firstChild.Content(content)},
+						ExprRange: exprRange(firstChild),
+					}
+				}
 			}
+			break
 		}
-
-		// Add to array items
-		arrayExpr.Items = append(arrayExpr.Items, itemExpr)
+		current = current.Parent()
 	}
 
-	// If no items were found, try to parse from text
-	if len(arrayExpr.Items) == 0 {
-		text := string(content[node.StartByte():node.EndByte()])
+	// If no source was found, create a new reference expression
+	if source == nil {
+		return nil, fmt.Errorf("get_attr node not attached to a variable expression")
+	}
 
-		// Check if it's an array expression
-		if strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]") {
-			content := strings.TrimSpace(text[1 : len(text)-1])
+	// Build traversal elements
+	var traversal []types.TraversalElem
 
-			// Split content by commas, but be careful about nested structures
-			var items []string
-			depth := 0
-			start := 0
+	// Process the current node
+	attrName := node.Content(content)
+	if strings.HasPrefix(attrName, ".") {
+		attrName = attrName[1:]
+	}
+	traversal = append(traversal, types.TraversalElem{
+		Type: "attr",
+		Name: attrName,
+	})
 
-			for i, c := range content {
-				switch c {
-				case '{', '[', '(':
-					depth++
-				case '}', ']', ')':
-					depth--
-				case ',':
-					if depth == 0 {
-						items = append(items, content[start:i])
-						start = i + 1
-					}
-				}
+	// Process any remaining siblings
+	current = node.NextNamedSibling()
+	for current != nil {
+		switch current.Type() {
+		case "get_attr":
+			// Skip the leading dot and add the attribute name
+			attrName := current.Content(content)
+			if strings.HasPrefix(attrName, ".") {
+				attrName = attrName[1:]
 			}
-
-			// Add the last item
-			if start < len(content) {
-				items = append(items, content[start:])
-			}
-
-			// Process each item
-			for _, item := range items {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-
-				// Try to determine item type
-				var itemExpr types.Expression
-
-				if strings.HasPrefix(item, "{") && strings.HasSuffix(item, "}") {
-					// Nested object
-					nestedObj, _ := parseObjectFromText(item, exprRange)
-					itemExpr = nestedObj
-				} else if strings.HasPrefix(item, "[") && strings.HasSuffix(item, "]") {
-					// Nested array
-					nestedArray, _ := parseArrayFromText(item, exprRange)
-					itemExpr = nestedArray
-				} else if strings.Contains(item, ".") && !strings.HasPrefix(item, "\"") {
-					// Reference
-					parts := strings.Split(item, ".")
-					for i := range parts {
-						parts[i] = strings.TrimSpace(parts[i])
-					}
-
-					itemExpr = &types.ReferenceExpr{
-						Parts:     parts,
-						ExprRange: exprRange,
+			traversal = append(traversal, types.TraversalElem{
+				Type: "attr",
+				Name: attrName,
+			})
+		case "index":
+			// Handle index expressions
+			if current.ChildCount() > 0 {
+				indexChild := current.Child(0)
+				var indexExpr types.Expression
+				if indexChild.Type() == "string_lit" {
+					// Strip quotes from string literals
+					indexValue := strings.Trim(indexChild.Content(content), "\"")
+					indexExpr = &types.LiteralValue{
+						Value:     indexValue,
+						ValueType: "string",
+						ExprRange: exprRange(indexChild),
 					}
 				} else {
-					// Literal value
-					itemExpr = &types.LiteralValue{
-						Value:     strings.Trim(item, "\""),
+					indexExpr = &types.LiteralValue{
+						Value:     indexChild.Content(content),
 						ValueType: "string",
-						ExprRange: exprRange,
+						ExprRange: exprRange(indexChild),
 					}
 				}
-
-				// Add to array items
-				arrayExpr.Items = append(arrayExpr.Items, itemExpr)
+				traversal = append(traversal, types.TraversalElem{
+					Type:  "index",
+					Index: indexExpr,
+				})
 			}
 		}
+		current = current.NextNamedSibling()
 	}
 
-	return arrayExpr, nil
+	// Return a RelativeTraversalExpr with the source and traversal
+	return &types.RelativeTraversalExpr{
+		Source:    source,
+		Traversal: traversal,
+		ExprRange: exprRange(node),
+	}, nil
 }
 
-// parseReferenceExpr parses a reference expression from a tree-sitter node
-func parseReferenceExpr(node *sitter.Node, content []byte) (*types.ReferenceExpr, error) {
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
+func parseTemplateExpr(node *sitter.Node, content []byte) (types.Expression, error) {
+	if node.NamedChildCount() < 1 {
+		return nil, fmt.Errorf("template expression node has no children")
 	}
 
-	// Get the text and split by dots
-	text := string(content[node.StartByte():node.EndByte()])
-	parts := strings.Split(text, ".")
-
-	// Clean up parts
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
+	quotedTemplate := node.NamedChild(0)
+	if quotedTemplate.Type() != "quoted_template" {
+		return nil, fmt.Errorf("expected quoted_template, got %s", quotedTemplate.Type())
 	}
 
-	// Create a reference expression
-	refExpr := &types.ReferenceExpr{
-		Parts:     parts,
-		ExprRange: exprRange,
-	}
-
-	return refExpr, nil
-}
-
-// parseFunctionCallExpr parses a function call expression from a tree-sitter node
-func parseFunctionCallExpr(node *sitter.Node, content []byte) (*types.FunctionCallExpr, error) {
-	// Create range information
-	exprRange := sitter.Range{
-		StartPoint: node.StartPoint(),
-		EndPoint:   node.EndPoint(),
-		StartByte:  node.StartByte(),
-		EndByte:    node.EndByte(),
-	}
-
-	// Create a function call expression
-	funcCallExpr := &types.FunctionCallExpr{
-		Args:      []types.Expression{},
-		ExprRange: exprRange,
-	}
-
-	// Find function name and arguments
-	var nameNode *sitter.Node
-
-	// Try to find function name by field name
-	nameNode = findChildByFieldName(node, "name")
-
-	// If not found by field name, try to find by position
-	if nameNode == nil && node.NamedChildCount() >= 1 {
-		nameNode = node.NamedChild(0)
-	}
-
-	// Parse function name
-	if nameNode != nil {
-		nameText := string(content[nameNode.StartByte():nameNode.EndByte()])
-		funcCallExpr.Name = nameText
-	}
-
-	// Find arguments
-	var argsNode *sitter.Node
-
-	// Try to find arguments by field name
-	argsNode = findChildByFieldName(node, "arguments")
-
-	// If not found by field name, try to find by position
-	if argsNode == nil {
-		// Look for children after the name node
-		for i := 1; i < int(node.NamedChildCount()); i++ {
-			childNode := node.NamedChild(int(i))
-
-			// If it's a tuple or parentheses, it's likely the arguments
-			if childNode.Type() == "tuple" || childNode.Type() == "parenthesized_expr" {
-				argsNode = childNode
-				break
+	parts := make([]types.Expression, 0)
+	for i := uint32(0); i < quotedTemplate.NamedChildCount(); i++ {
+		child := quotedTemplate.NamedChild(int(i))
+		switch child.Type() {
+		case "template_literal":
+			literal := &types.LiteralValue{
+				Value:     child.Content(content),
+				ValueType: "string",
+				ExprRange: exprRange(child),
 			}
-		}
-	}
-
-	// Parse arguments
-	if argsNode != nil {
-		for i := 0; i < int(argsNode.NamedChildCount()); i++ {
-			argNode := argsNode.NamedChild(int(i))
-
-			// Parse the argument
-			argExpr, err := parseExpression(argNode, content)
-			if err != nil {
-				// If we can't parse the argument, create a simple literal
-				argText := string(content[argNode.StartByte():argNode.EndByte()])
-				argExpr = &types.LiteralValue{
-					Value:     argText,
-					ValueType: "string",
-					ExprRange: sitter.Range{
-						StartPoint: argNode.StartPoint(),
-						EndPoint:   argNode.EndPoint(),
-						StartByte:  argNode.StartByte(),
-						EndByte:    argNode.EndByte(),
-					},
+			parts = append(parts, literal)
+		case "template_interpolation":
+			if child.NamedChildCount() > 0 {
+				expr, err := parseExpression(child.NamedChild(0), content)
+				if err == nil {
+					parts = append(parts, expr)
 				}
 			}
-
-			// Add to function call arguments
-			funcCallExpr.Args = append(funcCallExpr.Args, argExpr)
 		}
 	}
 
-	return funcCallExpr, nil
-}
-
-// parseObjectFromText parses an object expression from text
-func parseObjectFromText(text string, exprRange sitter.Range) (*types.ObjectExpr, error) {
-	// Validate input
-	if !strings.HasPrefix(text, "{") || !strings.HasSuffix(text, "}") {
-		return nil, fmt.Errorf("invalid object expression: %s", text)
-	}
-
-	// Create an object expression with empty items
-	objExpr := &types.ObjectExpr{
-		Items:     []types.ObjectItem{},
-		ExprRange: exprRange,
-	}
-
-	// Extract content between braces
-	content := strings.TrimSpace(text[1 : len(text)-1])
-	if content == "" {
-		return objExpr, nil
-	}
-
-	// Split content by commas, but be careful about nested structures
-	var items []string
-	depth := 0
-	start := 0
-
-	for i, c := range content {
-		switch c {
-		case '{', '[', '(':
-			depth++
-		case '}', ']', ')':
-			depth--
-		case ',':
-			if depth == 0 {
-				items = append(items, content[start:i])
-				start = i + 1
-			}
-		}
-	}
-
-	// Add the last item
-	if start < len(content) {
-		items = append(items, content[start:])
-	}
-
-	// Process each item
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-
-		// Split by "=" or ":"
-		var keyStr, valueStr string
-		equalIdx := strings.Index(item, "=")
-		colonIdx := strings.Index(item, ":")
-
-		if equalIdx > 0 {
-			keyStr = strings.TrimSpace(item[:equalIdx])
-			valueStr = strings.TrimSpace(item[equalIdx+1:])
-		} else if colonIdx > 0 {
-			keyStr = strings.TrimSpace(item[:colonIdx])
-			valueStr = strings.TrimSpace(item[colonIdx+1:])
-		} else {
-			// Invalid format, skip
-			continue
-		}
-
-		// Create key expression
-		keyExpr := &types.LiteralValue{
-			Value:     strings.Trim(keyStr, "\""),
-			ValueType: "string",
-			ExprRange: exprRange,
-		}
-
-		// Create value expression
-		var valueExpr types.Expression
-
-		// Try to determine value type
-		if strings.HasPrefix(valueStr, "{") && strings.HasSuffix(valueStr, "}") {
-			// Nested object
-			nestedObj, _ := parseObjectFromText(valueStr, exprRange)
-			valueExpr = nestedObj
-		} else if strings.HasPrefix(valueStr, "[") && strings.HasSuffix(valueStr, "]") {
-			// Array
-			nestedArray, _ := parseArrayFromText(valueStr, exprRange)
-			valueExpr = nestedArray
-		} else if strings.Contains(valueStr, ".") && !strings.HasPrefix(valueStr, "\"") {
-			// Reference
-			parts := strings.Split(valueStr, ".")
-			for i := range parts {
-				parts[i] = strings.TrimSpace(parts[i])
-			}
-
-			valueExpr = &types.ReferenceExpr{
-				Parts:     parts,
-				ExprRange: exprRange,
-			}
-		} else {
-			// Literal value
-			valueExpr = &types.LiteralValue{
-				Value:     strings.Trim(valueStr, "\""),
-				ValueType: "string",
-				ExprRange: exprRange,
-			}
-		}
-
-		// Add to object items
-		objExpr.Items = append(objExpr.Items, types.ObjectItem{
-			Key:   keyExpr,
-			Value: valueExpr,
-		})
-	}
-
-	return objExpr, nil
-}
-
-// parseArrayFromText parses an array expression from text
-func parseArrayFromText(text string, exprRange sitter.Range) (*types.ArrayExpr, error) {
-	// Validate input
-	if !strings.HasPrefix(text, "[") || !strings.HasSuffix(text, "]") {
-		return nil, fmt.Errorf("invalid array expression: %s", text)
-	}
-
-	// Create an array expression with empty items
-	arrayExpr := &types.ArrayExpr{
-		Items:     []types.Expression{},
-		ExprRange: exprRange,
-	}
-
-	// Extract content between brackets
-	content := strings.TrimSpace(text[1 : len(text)-1])
-	if content == "" {
-		return arrayExpr, nil
-	}
-
-	// Split content by commas, but be careful about nested structures
-	var items []string
-	depth := 0
-	start := 0
-
-	for i, c := range content {
-		switch c {
-		case '{', '[', '(':
-			depth++
-		case '}', ']', ')':
-			depth--
-		case ',':
-			if depth == 0 {
-				items = append(items, content[start:i])
-				start = i + 1
-			}
-		}
-	}
-
-	// Add the last item
-	if start < len(content) {
-		items = append(items, content[start:])
-	}
-
-	// Process each item
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-
-		// Try to determine item type
-		var itemExpr types.Expression
-
-		if strings.HasPrefix(item, "{") && strings.HasSuffix(item, "}") {
-			// Nested object
-			nestedObj, _ := parseObjectFromText(item, exprRange)
-			itemExpr = nestedObj
-		} else if strings.HasPrefix(item, "[") && strings.HasSuffix(item, "]") {
-			// Nested array
-			nestedArray, _ := parseArrayFromText(item, exprRange)
-			itemExpr = nestedArray
-		} else if strings.Contains(item, ".") && !strings.HasPrefix(item, "\"") {
-			// Reference
-			parts := strings.Split(item, ".")
-			for i := range parts {
-				parts[i] = strings.TrimSpace(parts[i])
-			}
-
-			itemExpr = &types.ReferenceExpr{
-				Parts:     parts,
-				ExprRange: exprRange,
-			}
-		} else {
-			// Literal value
-			itemExpr = &types.LiteralValue{
-				Value:     strings.Trim(item, "\""),
-				ValueType: "string",
-				ExprRange: exprRange,
-			}
-		}
-
-		// Add to array items
-		arrayExpr.Items = append(arrayExpr.Items, itemExpr)
-	}
-
-	return arrayExpr, nil
-}
-
-// findChildByFieldName finds a child node by its field name
-func findChildByFieldName(node *sitter.Node, fieldName string) *sitter.Node {
-	if node == nil {
-		return nil
-	}
-
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child == nil {
-			continue
-		}
-
-		field := node.FieldNameForChild(i)
-		if field == fieldName {
-			return child
-		}
-	}
-
-	return nil
-}
-
-// findAssociatedComments finds comments associated with a node
-func findAssociatedComments(node *sitter.Node, content []byte) (string, string) {
-	// Simple implementation for now - this is a placeholder
-	return "", ""
+	return &types.TemplateExpr{
+		Parts:     parts,
+		ExprRange: exprRange(node),
+	}, nil
 }

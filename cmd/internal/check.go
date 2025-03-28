@@ -554,13 +554,6 @@ func printASTHumanReadable(node interface{}, indent int) {
 		if n.InlineComment != "" {
 			fmt.Printf("%s  InlineComment: %s\n", indentStr, n.InlineComment)
 		}
-	case *types.DynamicBlock:
-		fmt.Printf("%sDynamicBlock: Labels=%v, Iterator=%s\n",
-			indentStr, n.Labels, n.Iterator)
-		fmt.Printf("%s  ForEach: %v\n", indentStr, getExpressionSummary(n.ForEach))
-		for _, child := range n.Content {
-			printASTHumanReadable(child, indent+1)
-		}
 	default:
 		fmt.Printf("%sUnknown node type: %T\n", indentStr, n)
 	}
