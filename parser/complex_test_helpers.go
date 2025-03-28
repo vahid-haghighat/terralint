@@ -798,36 +798,31 @@ func createComplexLocalsExpected() types.Body {
 					&types.Attribute{
 						Name: "subnet_map",
 						Value: &types.ForExpr{
-							ValueVar:   "subnet",
-							Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
-							ThenKeyExpr: &types.RelativeTraversalExpr{
-								Source: &types.ReferenceExpr{Parts: []string{"subnet"}},
-								Traversal: []types.TraversalElem{
-									{Type: "attr", Name: "name"},
-								},
-							},
+							ValueVar:    "subnet",
+							Collection:  &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
+							ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"subnet", "name"}},
 							ThenValueExpr: &types.ObjectExpr{
 								Items: []types.ObjectItem{
 									{
 										Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}}},
+										Value: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
 									},
 									{
 										Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "cidr"}}},
+										Value: &types.ReferenceExpr{Parts: []string{"subnet", "cidr_block"}},
 									},
 									{
 										Key:   &types.ReferenceExpr{Parts: []string{"az"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "availability_zone"}}},
+										Value: &types.ReferenceExpr{Parts: []string{"subnet", "availability_zone"}},
 									},
 									{
 										Key:   &types.ReferenceExpr{Parts: []string{"public"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}}},
+										Value: &types.ReferenceExpr{Parts: []string{"subnet", "public"}},
 									},
 									{
 										Key: &types.ReferenceExpr{Parts: []string{"nat_gw"}},
 										Value: &types.ConditionalExpr{
-											Condition: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}}},
+											Condition: &types.ReferenceExpr{Parts: []string{"subnet", "public"}},
 											TrueExpr:  &types.LiteralValue{Value: true, ValueType: "bool"},
 											FalseExpr: &types.LiteralValue{Value: false, ValueType: "bool"},
 										},
@@ -835,105 +830,98 @@ func createComplexLocalsExpected() types.Body {
 									{
 										Key: &types.ReferenceExpr{Parts: []string{"depends_on"}},
 										Value: &types.ConditionalExpr{
-											Condition: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"subnet"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}}},
+											Condition: &types.ReferenceExpr{Parts: []string{"subnet", "public"}},
 											TrueExpr:  &types.ArrayExpr{Items: []types.Expression{}},
-											FalseExpr: &types.ForExpr{
-												ValueVar:   "s",
-												Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
-												ThenValueExpr: &types.RelativeTraversalExpr{
-													Source:    &types.ReferenceExpr{Parts: []string{"s"}},
-													Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}},
+											FalseExpr: &types.ArrayExpr{Items: []types.Expression{
+												&types.ForExpr{
+													ValueVar:      "s",
+													Collection:    &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
+													ThenValueExpr: &types.ReferenceExpr{Parts: []string{"s", "id"}},
+													Condition:     &types.ReferenceExpr{Parts: []string{"s", "public"}},
 												},
-												Condition: &types.RelativeTraversalExpr{
-													Source:    &types.ReferenceExpr{Parts: []string{"s"}},
-													Traversal: []types.TraversalElem{{Type: "attr", Name: "public"}},
-												},
-											},
+											}},
 										},
 									},
 								},
 							},
 						},
+						BlockComment: "// Complex map transformation",
 					},
 					&types.Attribute{
 						Name: "filtered_instances",
-						Value: &types.ForExpr{
-							ValueVar:   "server",
-							Collection: &types.ReferenceExpr{Parts: []string{"var", "servers"}},
-							ThenValueExpr: &types.ObjectExpr{
-								Items: []types.ObjectItem{
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"name"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "name"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "environment"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"type"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "type"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"subnet_id"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "subnet_id"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "private_ip"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"public_ip"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "public_ip"}}},
-									},
-									{
-										Key:   &types.ReferenceExpr{Parts: []string{"tags"}},
-										Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"server"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "tags"}}},
-									},
-								},
-							},
-							Condition: &types.BinaryExpr{
-								Left: &types.BinaryExpr{
-									Left: &types.BinaryExpr{
-										Left: &types.RelativeTraversalExpr{
-											Source:    &types.ReferenceExpr{Parts: []string{"server"}},
-											Traversal: []types.TraversalElem{{Type: "attr", Name: "environment"}},
-										},
-										Operator: "==",
-										Right:    &types.ReferenceExpr{Parts: []string{"var", "environment"}},
-									},
-									Operator: "&&",
-									Right: &types.FunctionCallExpr{
-										Name: "contains",
-										Args: []types.Expression{
-											&types.ReferenceExpr{Parts: []string{"var", "allowed_types"}},
-											&types.RelativeTraversalExpr{
-												Source:    &types.ReferenceExpr{Parts: []string{"server"}},
-												Traversal: []types.TraversalElem{{Type: "attr", Name: "type"}},
+						Value: &types.ArrayExpr{
+							Items: []types.Expression{
+								&types.ForExpr{
+									ValueVar:   "server",
+									Collection: &types.ReferenceExpr{Parts: []string{"var", "servers"}},
+									ThenKeyExpr: &types.ObjectExpr{
+										Items: []types.ObjectItem{
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "id"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"name"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "name"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "environment"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "type"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"subnet_id"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "subnet_id"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "private_ip"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"public_ip"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "public_ip"}},
+											},
+											{
+												Key:   &types.ReferenceExpr{Parts: []string{"tags"}},
+												Value: &types.ReferenceExpr{Parts: []string{"server", "tags"}},
 											},
 										},
 									},
-								},
-								Operator: "&&",
-								Right: &types.UnaryExpr{
-									Operator: "!",
-									Expr: &types.FunctionCallExpr{
-										Name: "contains",
-										Args: []types.Expression{
-											&types.ReferenceExpr{Parts: []string{"var", "excluded_ids"}},
-											&types.RelativeTraversalExpr{
-												Source:    &types.ReferenceExpr{Parts: []string{"server"}},
-												Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}},
+									Condition: &types.BinaryExpr{
+										Left: &types.BinaryExpr{
+											Left:     &types.ReferenceExpr{Parts: []string{"server", "environment"}},
+											Operator: "==",
+											Right:    &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+										},
+										Operator: "&&",
+										Right: &types.BinaryExpr{
+											Left: &types.FunctionCallExpr{
+												Name: "contains",
+												Args: []types.Expression{
+													&types.ReferenceExpr{Parts: []string{"var", "allowed_types"}},
+													&types.ReferenceExpr{Parts: []string{"server", "type"}},
+												},
+											},
+											Operator: "&&",
+											Right: &types.UnaryExpr{
+												Operator: "!",
+												Expr: &types.FunctionCallExpr{
+													Name: "contains",
+													Args: []types.Expression{
+														&types.ReferenceExpr{Parts: []string{"var", "excluded_ids"}},
+														&types.ReferenceExpr{Parts: []string{"server", "id"}},
+													},
+												},
 											},
 										},
 									},
 								},
 							},
 						},
+						BlockComment: "// Nested for expressions with filtering",
 					},
 					&types.Attribute{
 						Name: "backup_config",
@@ -955,63 +943,69 @@ func createComplexLocalsExpected() types.Body {
 									},
 									{
 										Key: &types.ReferenceExpr{Parts: []string{"retention"}},
-										Value: &types.ConditionalExpr{
-											Condition: &types.BinaryExpr{
-												Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
-												Operator: "==",
-												Right:    &types.LiteralValue{Value: "prod", ValueType: "string"},
-											},
-											TrueExpr: &types.LiteralValue{Value: 30, ValueType: "number"},
-											FalseExpr: &types.ConditionalExpr{
+										Value: &types.ParenExpr{
+											Expression: &types.ConditionalExpr{
 												Condition: &types.BinaryExpr{
 													Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
 													Operator: "==",
-													Right:    &types.LiteralValue{Value: "staging", ValueType: "string"},
+													Right:    &types.LiteralValue{Value: "prod", ValueType: "string"},
 												},
-												TrueExpr:  &types.LiteralValue{Value: 14, ValueType: "number"},
-												FalseExpr: &types.LiteralValue{Value: 7, ValueType: "number"},
+												TrueExpr: &types.LiteralValue{Value: 30, ValueType: "number"},
+												FalseExpr: &types.ConditionalExpr{
+													Condition: &types.BinaryExpr{
+														Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+														Operator: "==",
+														Right:    &types.LiteralValue{Value: "staging", ValueType: "string"},
+													},
+													TrueExpr:  &types.LiteralValue{Value: 14, ValueType: "number"},
+													FalseExpr: &types.LiteralValue{Value: 7, ValueType: "number"},
+												},
 											},
 										},
 									},
 									{
 										Key: &types.ReferenceExpr{Parts: []string{"targets"}},
-										Value: &types.ForExpr{
-											ValueVar:   "target",
-											Collection: &types.ReferenceExpr{Parts: []string{"var", "backup_targets"}},
-											ThenValueExpr: &types.ObjectExpr{
-												Items: []types.ObjectItem{
-													{
-														Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-														Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"target"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "id"}}},
-													},
-													{
-														Key:   &types.ReferenceExpr{Parts: []string{"name"}},
-														Value: &types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"target"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "name"}}},
-													},
-													{
-														Key: &types.ReferenceExpr{Parts: []string{"priority"}},
-														Value: &types.FunctionCallExpr{
-															Name: "lookup",
-															Args: []types.Expression{
-																&types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"target"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "tags"}}},
-																&types.LiteralValue{Value: "backup-priority", ValueType: "string"},
-																&types.LiteralValue{Value: "medium", ValueType: "string"},
+										Value: &types.ArrayExpr{
+											Items: []types.Expression{
+												&types.ForExpr{
+													KeyVar:     "target",
+													Collection: &types.ReferenceExpr{Parts: []string{"var", "backup_targets"}},
+													ThenKeyExpr: &types.ObjectExpr{
+														Items: []types.ObjectItem{
+															{
+																Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																Value: &types.ReferenceExpr{Parts: []string{"target", "id"}},
+															},
+															{
+																Key:   &types.ReferenceExpr{Parts: []string{"name"}},
+																Value: &types.ReferenceExpr{Parts: []string{"target", "name"}},
+															},
+															{
+																Key: &types.ReferenceExpr{Parts: []string{"priority"}},
+																Value: &types.FunctionCallExpr{
+																	Name: "lookup",
+																	Args: []types.Expression{
+																		&types.ReferenceExpr{Parts: []string{"target", "tags"}},
+																		&types.LiteralValue{Value: "backup-priority", ValueType: "string"},
+																		&types.LiteralValue{Value: "medium", ValueType: "string"},
+																	},
+																},
 															},
 														},
 													},
-												},
-											},
-											Condition: &types.BinaryExpr{
-												Left: &types.FunctionCallExpr{
-													Name: "lookup",
-													Args: []types.Expression{
-														&types.RelativeTraversalExpr{Source: &types.ReferenceExpr{Parts: []string{"target"}}, Traversal: []types.TraversalElem{{Type: "attr", Name: "tags"}}},
-														&types.LiteralValue{Value: "backup-enabled", ValueType: "string"},
-														&types.LiteralValue{Value: "false", ValueType: "string"},
+													Condition: &types.BinaryExpr{
+														Left: &types.FunctionCallExpr{
+															Name: "lookup",
+															Args: []types.Expression{
+																&types.ReferenceExpr{Parts: []string{"target", "tags"}},
+																&types.LiteralValue{Value: "backup-enabled", ValueType: "string"},
+																&types.LiteralValue{Value: "false", ValueType: "string"},
+															},
+														},
+														Operator: "==",
+														Right:    &types.LiteralValue{Value: "true", ValueType: "string"},
 													},
 												},
-												Operator: "==",
-												Right:    &types.LiteralValue{Value: "true", ValueType: "string"},
 											},
 										},
 									},
@@ -1053,7 +1047,7 @@ func createComplexLocalsExpected() types.Body {
 																	Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
 																},
 																TrueExpr:  &types.ReferenceExpr{Parts: []string{"var", "custom_storage_settings"}},
-																FalseExpr: &types.ObjectExpr{Items: []types.ObjectItem{}},
+																FalseExpr: &types.ObjectExpr{},
 															},
 														},
 													},
@@ -1065,6 +1059,7 @@ func createComplexLocalsExpected() types.Body {
 							},
 							FalseExpr: &types.LiteralValue{Value: nil, ValueType: "null"},
 						},
+						BlockComment: "// Complex conditional with multiple nested expressions",
 					},
 					&types.Attribute{
 						Name: "naming_convention",
@@ -1096,38 +1091,46 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
+						BlockComment: "// Complex string interpolation with functions",
 					},
 					&types.Attribute{
 						Name: "timeout_seconds",
-						Value: &types.ConditionalExpr{
-							Condition: &types.BinaryExpr{
-								Left:     &types.ReferenceExpr{Parts: []string{"var", "custom_timeout"}},
-								Operator: "!=",
-								Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
-							},
-							TrueExpr: &types.ReferenceExpr{Parts: []string{"var", "custom_timeout"}},
-							FalseExpr: &types.ConditionalExpr{
+						Value: &types.ParenExpr{
+							Expression: &types.ConditionalExpr{
 								Condition: &types.BinaryExpr{
-									Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
-									Operator: "==",
-									Right:    &types.LiteralValue{Value: "prod", ValueType: "string"},
+									Left:     &types.ReferenceExpr{Parts: []string{"var", "custom_timeout"}},
+									Operator: "!=",
+									Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
 								},
-								TrueExpr: &types.ConditionalExpr{
-									Condition: &types.ReferenceExpr{Parts: []string{"var", "high_availability"}},
-									TrueExpr:  &types.LiteralValue{Value: 300, ValueType: "number"},
-									FalseExpr: &types.LiteralValue{Value: 180, ValueType: "number"},
-								},
+								TrueExpr: &types.ReferenceExpr{Parts: []string{"var", "custom_timeout"}},
 								FalseExpr: &types.ConditionalExpr{
 									Condition: &types.BinaryExpr{
 										Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
 										Operator: "==",
-										Right:    &types.LiteralValue{Value: "staging", ValueType: "string"},
+										Right:    &types.LiteralValue{Value: "prod", ValueType: "string"},
 									},
-									TrueExpr:  &types.LiteralValue{Value: 120, ValueType: "number"},
-									FalseExpr: &types.LiteralValue{Value: 60, ValueType: "number"},
+									TrueExpr: &types.ParenExpr{
+										Expression: &types.ConditionalExpr{
+											Condition: &types.ReferenceExpr{Parts: []string{"var", "high_availability"}},
+											TrueExpr:  &types.LiteralValue{Value: 300, ValueType: "number"},
+											FalseExpr: &types.LiteralValue{Value: 180, ValueType: "number"},
+										},
+									},
+									FalseExpr: &types.ParenExpr{
+										Expression: &types.ConditionalExpr{
+											Condition: &types.BinaryExpr{
+												Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+												Operator: "==",
+												Right:    &types.LiteralValue{Value: "staging", ValueType: "string"},
+											},
+											TrueExpr:  &types.LiteralValue{Value: 120, ValueType: "number"},
+											FalseExpr: &types.LiteralValue{Value: 60, ValueType: "number"},
+										},
+									},
 								},
 							},
 						},
+						BlockComment: "// Nested ternary operators",
 					},
 					&types.Attribute{
 						Name: "schema",
@@ -1201,6 +1204,57 @@ func createComplexLocalsExpected() types.Body {
 																			},
 																		},
 																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"options"}},
+																		Value: &types.ObjectExpr{
+																			Items: []types.ObjectItem{
+																				{
+																					Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																					Value: &types.LiteralValue{Value: "array", ValueType: "string"},
+																				},
+																				{
+																					Key: &types.ReferenceExpr{Parts: []string{"items"}},
+																					Value: &types.ObjectExpr{
+																						Items: []types.ObjectItem{
+																							{
+																								Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																								Value: &types.LiteralValue{Value: "object", ValueType: "string"},
+																							},
+																							{
+																								Key: &types.ReferenceExpr{Parts: []string{"properties"}},
+																								Value: &types.ObjectExpr{
+																									Items: []types.ObjectItem{
+																										{
+																											Key: &types.ReferenceExpr{Parts: []string{"name"}},
+																											Value: &types.ObjectExpr{
+																												Items: []types.ObjectItem{
+																													{
+																														Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																														Value: &types.LiteralValue{Value: "string", ValueType: "string"},
+																													},
+																												},
+																											},
+																										},
+																										{
+																											Key: &types.ReferenceExpr{Parts: []string{"value"}},
+																											Value: &types.ObjectExpr{
+																												Items: []types.ObjectItem{
+																													{
+																														Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																														Value: &types.LiteralValue{Value: "string", ValueType: "string"},
+																													},
+																												},
+																											},
+																										},
+																									},
+																								},
+																							},
+																						},
+																					},
+																				},
+																			},
+																		},
+																	},
 																},
 															},
 														},
@@ -1216,8 +1270,15 @@ func createComplexLocalsExpected() types.Body {
 															Value: &types.LiteralValue{Value: "object", ValueType: "string"},
 														},
 														{
-															Key:   &types.ReferenceExpr{Parts: []string{"additionalProperties"}},
-															Value: &types.ObjectExpr{Items: []types.ObjectItem{{Key: &types.ReferenceExpr{Parts: []string{"type"}}, Value: &types.LiteralValue{Value: "string", ValueType: "string"}}}},
+															Key: &types.ReferenceExpr{Parts: []string{"additionalProperties"}},
+															Value: &types.ObjectExpr{
+																Items: []types.ObjectItem{
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																		Value: &types.LiteralValue{Value: "string", ValueType: "string"},
+																	},
+																},
+															},
 														},
 													},
 												},
@@ -1227,6 +1288,7 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
+						BlockComment: "// Complex type expressions",
 					},
 				},
 			},
