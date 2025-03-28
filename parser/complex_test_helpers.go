@@ -581,21 +581,11 @@ func createComplexResourceExpected() types.Body {
 					&types.Attribute{
 						Name: "for_each",
 						Value: &types.ForExpr{
-							ValueVar:   "sg",
-							Collection: &types.ReferenceExpr{Parts: []string{"var", "security_groups"}},
-							ThenKeyExpr: &types.RelativeTraversalExpr{
-								Source: &types.ReferenceExpr{Parts: []string{"sg"}},
-								Traversal: []types.TraversalElem{
-									{Type: "attr", Name: "name"},
-								},
-							},
+							KeyVar:        "sg",
+							Collection:    &types.ReferenceExpr{Parts: []string{"var", "security_groups"}},
+							ThenKeyExpr:   &types.ReferenceExpr{Parts: []string{"sg", "name"}},
 							ThenValueExpr: &types.ReferenceExpr{Parts: []string{"sg"}},
-							Condition: &types.RelativeTraversalExpr{
-								Source: &types.ReferenceExpr{Parts: []string{"sg"}},
-								Traversal: []types.TraversalElem{
-									{Type: "attr", Name: "create"},
-								},
-							},
+							Condition:     &types.ReferenceExpr{Parts: []string{"sg", "create"}},
 						},
 					},
 					&types.Attribute{
@@ -609,50 +599,169 @@ func createComplexResourceExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name: "description",
-						Value: &types.RelativeTraversalExpr{
-							Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-							Traversal: []types.TraversalElem{
-								{Type: "attr", Name: "description"},
-							},
-						},
+						Name:  "description",
+						Value: &types.ReferenceExpr{Parts: []string{"each", "value", "description"}},
 					},
 					&types.Attribute{
 						Name:  "vpc_id",
 						Value: &types.ReferenceExpr{Parts: []string{"var", "vpc_id"}},
 					},
-					&types.DynamicBlock{
-						ForEach: &types.RelativeTraversalExpr{
-							Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-							Traversal: []types.TraversalElem{
-								{Type: "attr", Name: "ingress_rules"},
+					&types.Block{
+						Type:   "dynamic",
+						Labels: []string{"ingress"},
+						Children: []types.Body{
+							&types.Attribute{
+								Name:  "for_each",
+								Value: &types.ReferenceExpr{Parts: []string{"each", "value", "ingress_rules"}},
 							},
-						},
-						Iterator: "ingress",
-						Labels:   []string{"ingress"},
-						Content: []types.Body{
-							&types.Attribute{Name: "description"},
-							&types.Attribute{Name: "from_port"},
-							&types.Attribute{Name: "to_port"},
-							&types.Attribute{Name: "protocol"},
-							&types.Attribute{Name: "cidr_blocks"},
+							&types.Block{
+								Type: "content",
+								Children: []types.Body{
+									&types.Attribute{
+										Name:  "description",
+										Value: &types.ReferenceExpr{Parts: []string{"ingress", "value", "description"}},
+									},
+									&types.Attribute{
+										Name:  "from_port",
+										Value: &types.ReferenceExpr{Parts: []string{"ingress", "value", "from_port"}},
+									},
+									&types.Attribute{
+										Name:  "to_port",
+										Value: &types.ReferenceExpr{Parts: []string{"ingress", "value", "to_port"}},
+									},
+									&types.Attribute{
+										Name:  "protocol",
+										Value: &types.ReferenceExpr{Parts: []string{"ingress", "value", "protocol"}},
+									},
+									&types.Attribute{
+										Name:  "cidr_blocks",
+										Value: &types.ReferenceExpr{Parts: []string{"ingress", "value", "cidr_blocks"}},
+									},
+									&types.Attribute{
+										Name: "ipv6_cidr_blocks",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"ingress", "value"}},
+												&types.LiteralValue{Value: "ipv6_cidr_blocks", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "prefix_list_ids",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"ingress", "value"}},
+												&types.LiteralValue{Value: "prefix_list_ids", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "security_groups",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"ingress", "value"}},
+												&types.LiteralValue{Value: "security_groups", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "self",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"ingress", "value"}},
+												&types.LiteralValue{Value: "self", ValueType: "string"},
+												&types.LiteralValue{Value: false, ValueType: "bool"},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
-					&types.DynamicBlock{
-						ForEach: &types.RelativeTraversalExpr{
-							Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-							Traversal: []types.TraversalElem{
-								{Type: "attr", Name: "egress_rules"},
+					&types.Block{
+						Type:   "dynamic",
+						Labels: []string{"egress"},
+						Children: []types.Body{
+							&types.Attribute{
+								Name:  "for_each",
+								Value: &types.ReferenceExpr{Parts: []string{"each", "value", "egress_rules"}},
 							},
-						},
-						Iterator: "egress",
-						Labels:   []string{"egress"},
-						Content: []types.Body{
-							&types.Attribute{Name: "description"},
-							&types.Attribute{Name: "from_port"},
-							&types.Attribute{Name: "to_port"},
-							&types.Attribute{Name: "protocol"},
-							&types.Attribute{Name: "cidr_blocks"},
+							&types.Block{
+								Type: "content",
+								Children: []types.Body{
+									&types.Attribute{
+										Name:  "description",
+										Value: &types.ReferenceExpr{Parts: []string{"egress", "value", "description"}},
+									},
+									&types.Attribute{
+										Name:  "from_port",
+										Value: &types.ReferenceExpr{Parts: []string{"egress", "value", "from_port"}},
+									},
+									&types.Attribute{
+										Name:  "to_port",
+										Value: &types.ReferenceExpr{Parts: []string{"egress", "value", "to_port"}},
+									},
+									&types.Attribute{
+										Name:  "protocol",
+										Value: &types.ReferenceExpr{Parts: []string{"egress", "value", "protocol"}},
+									},
+									&types.Attribute{
+										Name:  "cidr_blocks",
+										Value: &types.ReferenceExpr{Parts: []string{"egress", "value", "cidr_blocks"}},
+									},
+									&types.Attribute{
+										Name: "ipv6_cidr_blocks",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"egress", "value"}},
+												&types.LiteralValue{Value: "ipv6_cidr_blocks", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "prefix_list_ids",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"egress", "value"}},
+												&types.LiteralValue{Value: "prefix_list_ids", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "security_groups",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"egress", "value"}},
+												&types.LiteralValue{Value: "security_groups", ValueType: "string"},
+												&types.ArrayExpr{},
+											},
+										},
+									},
+									&types.Attribute{
+										Name: "self",
+										Value: &types.FunctionCallExpr{
+											Name: "lookup",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"egress", "value"}},
+												&types.LiteralValue{Value: "self", ValueType: "string"},
+												&types.LiteralValue{Value: false, ValueType: "bool"},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					&types.Attribute{
@@ -688,28 +797,14 @@ func createComplexResourceExpected() types.Body {
 																Key: &types.ReferenceExpr{Parts: []string{"ingress"}},
 																Value: &types.FunctionCallExpr{
 																	Name: "length",
-																	Args: []types.Expression{
-																		&types.RelativeTraversalExpr{
-																			Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-																			Traversal: []types.TraversalElem{
-																				{Type: "attr", Name: "ingress_rules"},
-																			},
-																		},
-																	},
+																	Args: []types.Expression{&types.ReferenceExpr{Parts: []string{"each", "value", "ingress_rules"}}},
 																},
 															},
 															{
 																Key: &types.ReferenceExpr{Parts: []string{"egress"}},
 																Value: &types.FunctionCallExpr{
 																	Name: "length",
-																	Args: []types.Expression{
-																		&types.RelativeTraversalExpr{
-																			Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-																			Traversal: []types.TraversalElem{
-																				{Type: "attr", Name: "egress_rules"},
-																			},
-																		},
-																	},
+																	Args: []types.Expression{&types.ReferenceExpr{Parts: []string{"each", "value", "egress_rules"}}},
 																},
 															},
 														},
@@ -721,25 +816,16 @@ func createComplexResourceExpected() types.Body {
 								},
 								&types.ConditionalExpr{
 									Condition: &types.BinaryExpr{
-										Left: &types.RelativeTraversalExpr{
-											Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-											Traversal: []types.TraversalElem{
-												{Type: "attr", Name: "additional_tags"},
-											},
-										},
+										Left:     &types.ReferenceExpr{Parts: []string{"each", "value", "additional_tags"}},
 										Operator: "!=",
 										Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
 									},
-									TrueExpr: &types.RelativeTraversalExpr{
-										Source: &types.ReferenceExpr{Parts: []string{"each", "value"}},
-										Traversal: []types.TraversalElem{
-											{Type: "attr", Name: "additional_tags"},
-										},
-									},
-									FalseExpr: &types.ObjectExpr{Items: []types.ObjectItem{}},
+									TrueExpr:  &types.ReferenceExpr{Parts: []string{"each", "value", "additional_tags"}},
+									FalseExpr: &types.ObjectExpr{},
 								},
 							},
 						},
+						BlockComment: "// Complex tags with expressions and functions",
 					},
 					&types.Block{
 						Type: "lifecycle",
