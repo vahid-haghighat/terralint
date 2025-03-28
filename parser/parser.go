@@ -714,9 +714,19 @@ func parseAttribute(node *sitter.Node, content []byte) (*types.Attribute, error)
 	// Get the text of the expression
 	exprText := string(content[exprNode.StartByte():exprNode.EndByte()])
 	var expr types.Expression
+	exprRange := sitter.Range{
+		StartPoint: exprNode.StartPoint(),
+		EndPoint:   exprNode.EndPoint(),
+		StartByte:  exprNode.StartByte(),
+		EndByte:    exprNode.EndByte(),
+	}
 
-	// Special handling for for expressions in attribute values
-	if (strings.HasPrefix(exprText, "[") || strings.HasPrefix(exprText, "{")) &&
+	// Try to parse complex expressions first using our enhanced createReferenceFromText
+	// For conditional expressions and function calls, use the specialized parser
+	if (strings.Contains(exprText, " ? ") && strings.Contains(exprText, " : ")) ||
+		(strings.Contains(exprText, "(") && strings.Contains(exprText, ")")) {
+		expr = createReferenceFromText(exprText, exprRange)
+	} else if (strings.HasPrefix(exprText, "[") || strings.HasPrefix(exprText, "{")) &&
 		strings.Contains(exprText, "for") && strings.Contains(exprText, "in") && strings.Contains(exprText, ":") {
 		// This looks like a for expression
 		forExpr, err := parseForExprFromText(exprText, exprNode, content)
@@ -732,19 +742,13 @@ func parseAttribute(node *sitter.Node, content []byte) (*types.Attribute, error)
 	} else if strings.Contains(exprText, ".") && !strings.HasPrefix(exprText, "\"") &&
 		!strings.Contains(exprText, "{") && !strings.HasPrefix(exprText, "[") {
 		// This is likely a reference with dots (like var.brewdex_secret)
-		// Make sure it's not an array by checking for "[" prefix
 		parts := strings.Split(exprText, ".")
 		for i := range parts {
 			parts[i] = strings.TrimSpace(parts[i])
 		}
 		expr = &types.ReferenceExpr{
-			Parts: parts,
-			ExprRange: sitter.Range{
-				StartPoint: exprNode.StartPoint(),
-				EndPoint:   exprNode.EndPoint(),
-				StartByte:  exprNode.StartByte(),
-				EndByte:    exprNode.EndByte(),
-			},
+			Parts:     parts,
+			ExprRange: exprRange,
 		}
 	} else {
 		// Try normal parsing
@@ -1350,11 +1354,134 @@ func parseReferenceExpr(node *sitter.Node, content []byte) (types.Expression, er
 	// Debug the reference expression - uncomment for debugging
 	// fmt.Printf("Reference text: %q\n", fullText)
 
-	// Check if this is a reference to a variable or attribute
-	// We need to handle cases like:
-	// 1. Simple references: var, github
-	// 2. Attribute access: var.foo, github.here
-	// 3. Nested attribute access: module.foo.bar
+	// Check for conditional expressions (ternary operator)
+	if strings.Contains(fullText, " ? ") && strings.Contains(fullText, " : ") {
+		// This looks like a conditional expression
+		parts := strings.SplitN(fullText, " ? ", 2)
+		if len(parts) == 2 {
+			conditionText := parts[0]
+			resultParts := strings.SplitN(parts[1], " : ", 2)
+			if len(resultParts) == 2 {
+				trueText := resultParts[0]
+				falseText := resultParts[1]
+
+				// Create condition expression
+				var condition types.Expression
+				if strings.Contains(conditionText, " == ") {
+					// Binary expression for condition
+					binParts := strings.SplitN(conditionText, " == ", 2)
+					if len(binParts) == 2 {
+						left := createReferenceFromText(binParts[0], sitter.Range{})
+						right := &types.LiteralValue{
+							Value:     strings.Trim(binParts[1], "\""),
+							ValueType: "string",
+							ExprRange: sitter.Range{},
+						}
+						condition = &types.BinaryExpr{
+							Left:      left,
+							Operator:  "==",
+							Right:     right,
+							ExprRange: sitter.Range{},
+						}
+					} else {
+						condition = createReferenceFromText(conditionText, sitter.Range{})
+					}
+				} else if strings.Contains(conditionText, " != ") {
+					// Binary expression for condition
+					binParts := strings.SplitN(conditionText, " != ", 2)
+					if len(binParts) == 2 {
+						left := createReferenceFromText(binParts[0], sitter.Range{})
+						var right types.Expression
+						if strings.TrimSpace(binParts[1]) == "null" {
+							right = &types.LiteralValue{
+								Value:     nil,
+								ValueType: "null",
+								ExprRange: sitter.Range{},
+							}
+						} else {
+							right = createReferenceFromText(binParts[1], sitter.Range{})
+						}
+						condition = &types.BinaryExpr{
+							Left:      left,
+							Operator:  "!=",
+							Right:     right,
+							ExprRange: sitter.Range{},
+						}
+					} else {
+						condition = createReferenceFromText(conditionText, sitter.Range{})
+					}
+				} else {
+					condition = createReferenceFromText(conditionText, sitter.Range{})
+				}
+
+				// Create true and false expressions
+				trueExpr := createReferenceFromText(trueText, sitter.Range{})
+				falseExpr := createReferenceFromText(falseText, sitter.Range{})
+
+				return &types.ConditionalExpr{
+					Condition: condition,
+					TrueExpr:  trueExpr,
+					FalseExpr: falseExpr,
+					ExprRange: sitter.Range{
+						StartPoint: node.StartPoint(),
+						EndPoint:   node.EndPoint(),
+						StartByte:  node.StartByte(),
+						EndByte:    node.EndByte(),
+					},
+				}, nil
+			}
+		}
+	}
+
+	// Check for function calls
+	if strings.Contains(fullText, "(") && strings.Contains(fullText, ")") {
+		// This might be a function call
+		funcNameEndPos := strings.Index(fullText, "(")
+		if funcNameEndPos > 0 {
+			funcName := strings.TrimSpace(fullText[:funcNameEndPos])
+			argString := fullText[funcNameEndPos+1 : strings.LastIndex(fullText, ")")]
+
+			// Parse arguments
+			var args []types.Expression
+			if argString != "" {
+				// Simple argument parsing by commas (this is a basic implementation)
+				// For a production parser, you'd need more sophisticated parsing here
+				argParts := strings.Split(argString, ",")
+				for _, argPart := range argParts {
+					argPart = strings.TrimSpace(argPart)
+					if strings.HasPrefix(argPart, "\"") && strings.HasSuffix(argPart, "\"") {
+						// String literal
+						args = append(args, &types.LiteralValue{
+							Value:     argPart[1 : len(argPart)-1],
+							ValueType: "string",
+							ExprRange: sitter.Range{},
+						})
+					} else if argPart == "null" {
+						// Null literal
+						args = append(args, &types.LiteralValue{
+							Value:     nil,
+							ValueType: "null",
+							ExprRange: sitter.Range{},
+						})
+					} else {
+						// Reference or other expression
+						args = append(args, createReferenceFromText(argPart, sitter.Range{}))
+					}
+				}
+			}
+
+			return &types.FunctionCallExpr{
+				Name: funcName,
+				Args: args,
+				ExprRange: sitter.Range{
+					StartPoint: node.StartPoint(),
+					EndPoint:   node.EndPoint(),
+					StartByte:  node.StartByte(),
+					EndByte:    node.EndByte(),
+				},
+			}, nil
+		}
+	}
 
 	// Get the parent node type to understand the context
 	var parentType string
@@ -1928,6 +2055,312 @@ func parseObjectFromText(text string, exprRange sitter.Range) *types.ObjectExpr 
 
 // Helper function to create a reference expression from text
 func createReferenceFromText(text string, exprRange sitter.Range) types.Expression {
+	// Check for template strings with ${...} interpolations
+	if strings.Contains(text, "${") && strings.Contains(text, "}") {
+		// This is a template string with interpolations
+		templateExpr := &types.TemplateExpr{
+			Parts:     []types.Expression{},
+			ExprRange: exprRange,
+		}
+
+		// Split the string by ${
+		parts := strings.Split(text, "${")
+
+		// The first part is just literal text before any interpolation
+		if len(parts) > 0 && parts[0] != "" {
+			// Remove quotes if present
+			literal := parts[0]
+			if strings.HasPrefix(literal, "\"") {
+				literal = literal[1:]
+			}
+			templateExpr.Parts = append(templateExpr.Parts, &types.LiteralValue{
+				Value:     literal,
+				ValueType: "string",
+				ExprRange: exprRange,
+			})
+		}
+
+		// Process the rest of the parts, which start with the interpolation contents
+		for i := 1; i < len(parts); i++ {
+			if parts[i] == "" {
+				continue
+			}
+
+			// Find the matching closing brace
+			closeBraceIndex := strings.Index(parts[i], "}")
+			if closeBraceIndex == -1 {
+				continue
+			}
+
+			// Extract the expression inside ${ ... }
+			exprInside := parts[i][:closeBraceIndex]
+
+			// Parse the expression inside interpolation
+			var interpolatedExpr types.Expression
+
+			// Handle different expression types inside interpolation
+			if strings.Contains(exprInside, ".") && !strings.Contains(exprInside, "(") {
+				// Simple reference like var.environment
+				refParts := strings.Split(exprInside, ".")
+				for j := range refParts {
+					refParts[j] = strings.TrimSpace(refParts[j])
+				}
+				interpolatedExpr = &types.ReferenceExpr{
+					Parts:     refParts,
+					ExprRange: exprRange,
+				}
+			} else if strings.Contains(exprInside, "(") && strings.Contains(exprInside, ")") {
+				// Function call like formatdate("YYYY-MM-DD", timestamp())
+				fnNameEnd := strings.Index(exprInside, "(")
+				if fnNameEnd <= 0 {
+					// Invalid function call syntax
+					interpolatedExpr = &types.LiteralValue{
+						Value:     exprInside,
+						ValueType: "string",
+						ExprRange: exprRange,
+					}
+				} else {
+					fnName := strings.TrimSpace(exprInside[:fnNameEnd])
+
+					// Extract function arguments
+					lastParenIndex := strings.LastIndex(exprInside, ")")
+					if lastParenIndex == -1 || lastParenIndex <= fnNameEnd {
+						// No closing parenthesis or it's before the opening one
+						interpolatedExpr = &types.LiteralValue{
+							Value:     exprInside,
+							ValueType: "string",
+							ExprRange: exprRange,
+						}
+					} else {
+						argsText := exprInside[fnNameEnd+1 : lastParenIndex]
+
+						var args []types.Expression
+						if argsText != "" {
+							// Parse function arguments
+							argParts := strings.Split(argsText, ",")
+							for _, argPart := range argParts {
+								argPart = strings.TrimSpace(argPart)
+								if argPart == "" {
+									continue
+								}
+
+								if strings.HasPrefix(argPart, "\"") && strings.HasSuffix(argPart, "\"") && len(argPart) >= 2 {
+									// String literal
+									args = append(args, &types.LiteralValue{
+										Value:     argPart[1 : len(argPart)-1],
+										ValueType: "string",
+										ExprRange: exprRange,
+									})
+								} else if argPart == "null" {
+									// Null literal
+									args = append(args, &types.LiteralValue{
+										Value:     nil,
+										ValueType: "null",
+										ExprRange: exprRange,
+									})
+								} else if !strings.Contains(argPart, "(") {
+									// Simple function call without arguments like timestamp()
+									if strings.HasSuffix(argPart, "()") {
+										fnNameInner := strings.TrimSuffix(argPart, "()")
+										args = append(args, &types.FunctionCallExpr{
+											Name:      fnNameInner,
+											Args:      []types.Expression{},
+											ExprRange: exprRange,
+										})
+									} else {
+										// Reference
+										args = append(args, createReferenceFromText(argPart, exprRange))
+									}
+								} else {
+									// Nested function call
+									args = append(args, createReferenceFromText(argPart, exprRange))
+								}
+							}
+						}
+
+						interpolatedExpr = &types.FunctionCallExpr{
+							Name:      fnName,
+							Args:      args,
+							ExprRange: exprRange,
+						}
+					}
+				}
+			} else {
+				// Other expression types
+				interpolatedExpr = &types.LiteralValue{
+					Value:     exprInside,
+					ValueType: "string",
+					ExprRange: exprRange,
+				}
+			}
+
+			templateExpr.Parts = append(templateExpr.Parts, interpolatedExpr)
+
+			// Add any remaining literal text after closing brace
+			if closeBraceIndex+1 < len(parts[i]) {
+				literalAfter := parts[i][closeBraceIndex+1:]
+				// If this is the last part, check for trailing quote
+				if i == len(parts)-1 && strings.HasSuffix(literalAfter, "\"") {
+					literalAfter = literalAfter[:len(literalAfter)-1]
+				}
+				if literalAfter != "" {
+					templateExpr.Parts = append(templateExpr.Parts, &types.LiteralValue{
+						Value:     literalAfter,
+						ValueType: "string",
+						ExprRange: exprRange,
+					})
+				}
+			}
+		}
+
+		return templateExpr
+	}
+
+	// Check for conditional expressions (ternary operator)
+	if strings.Contains(text, " ? ") && strings.Contains(text, " : ") {
+		parts := strings.SplitN(text, " ? ", 2)
+		if len(parts) == 2 {
+			conditionText := parts[0]
+			resultParts := strings.SplitN(parts[1], " : ", 2)
+			if len(resultParts) == 2 {
+				trueText := resultParts[0]
+				falseText := resultParts[1]
+
+				// Create condition expression
+				var condition types.Expression
+				if strings.Contains(conditionText, " == ") {
+					// Binary expression for condition
+					binParts := strings.SplitN(conditionText, " == ", 2)
+					if len(binParts) == 2 {
+						left := createReferenceFromText(binParts[0], exprRange)
+						var right types.Expression
+						if strings.HasPrefix(binParts[1], "\"") && strings.HasSuffix(binParts[1], "\"") {
+							// String literal
+							right = &types.LiteralValue{
+								Value:     strings.Trim(binParts[1], "\""),
+								ValueType: "string",
+								ExprRange: exprRange,
+							}
+						} else {
+							right = createReferenceFromText(binParts[1], exprRange)
+						}
+						condition = &types.BinaryExpr{
+							Left:      left,
+							Operator:  "==",
+							Right:     right,
+							ExprRange: exprRange,
+						}
+					} else {
+						condition = createReferenceFromText(conditionText, exprRange)
+					}
+				} else if strings.Contains(conditionText, " != ") {
+					// Binary expression for condition
+					binParts := strings.SplitN(conditionText, " != ", 2)
+					if len(binParts) == 2 {
+						left := createReferenceFromText(binParts[0], exprRange)
+						var right types.Expression
+						if strings.TrimSpace(binParts[1]) == "null" {
+							right = &types.LiteralValue{
+								Value:     nil,
+								ValueType: "null",
+								ExprRange: exprRange,
+							}
+						} else {
+							right = createReferenceFromText(binParts[1], exprRange)
+						}
+						condition = &types.BinaryExpr{
+							Left:      left,
+							Operator:  "!=",
+							Right:     right,
+							ExprRange: exprRange,
+						}
+					} else {
+						condition = createReferenceFromText(conditionText, exprRange)
+					}
+				} else {
+					condition = createReferenceFromText(conditionText, exprRange)
+				}
+
+				// Create true and false expressions
+				trueExpr := createReferenceFromText(trueText, exprRange)
+				falseExpr := createReferenceFromText(falseText, exprRange)
+
+				return &types.ConditionalExpr{
+					Condition: condition,
+					TrueExpr:  trueExpr,
+					FalseExpr: falseExpr,
+					ExprRange: exprRange,
+				}
+			}
+		}
+	}
+
+	// Check for function calls
+	if strings.Contains(text, "(") && strings.Contains(text, ")") {
+		fnNameEnd := strings.Index(text, "(")
+		if fnNameEnd <= 0 {
+			// Invalid function name, treat as a literal
+			return &types.LiteralValue{
+				Value:     text,
+				ValueType: "string",
+				ExprRange: exprRange,
+			}
+		}
+
+		fnName := strings.TrimSpace(text[:fnNameEnd])
+
+		// Extract arguments string
+		lastParenIndex := strings.LastIndex(text, ")")
+		if lastParenIndex == -1 || lastParenIndex <= fnNameEnd {
+			// No closing parenthesis or it's in an invalid position
+			return &types.LiteralValue{
+				Value:     text,
+				ValueType: "string",
+				ExprRange: exprRange,
+			}
+		}
+
+		argsText := text[fnNameEnd+1 : lastParenIndex]
+
+		// Parse function arguments
+		var args []types.Expression
+		if argsText != "" {
+			// Simple argument parsing by commas (this is a basic implementation)
+			argParts := strings.Split(argsText, ",")
+			for _, argPart := range argParts {
+				argPart = strings.TrimSpace(argPart)
+				if argPart == "" {
+					continue
+				}
+
+				if strings.HasPrefix(argPart, "\"") && strings.HasSuffix(argPart, "\"") && len(argPart) >= 2 {
+					// String literal
+					args = append(args, &types.LiteralValue{
+						Value:     argPart[1 : len(argPart)-1],
+						ValueType: "string",
+						ExprRange: exprRange,
+					})
+				} else if argPart == "null" {
+					// Null literal
+					args = append(args, &types.LiteralValue{
+						Value:     nil,
+						ValueType: "null",
+						ExprRange: exprRange,
+					})
+				} else {
+					// Reference or other expression
+					args = append(args, createReferenceFromText(argPart, exprRange))
+				}
+			}
+		}
+
+		return &types.FunctionCallExpr{
+			Name:      fnName,
+			Args:      args,
+			ExprRange: exprRange,
+		}
+	}
+
 	// If it contains dots, it's a reference
 	if strings.Contains(text, ".") && !strings.HasPrefix(text, "\"") {
 		parts := strings.Split(text, ".")
@@ -1936,19 +2369,6 @@ func createReferenceFromText(text string, exprRange sitter.Range) types.Expressi
 		}
 		return &types.ReferenceExpr{
 			Parts:     parts,
-			ExprRange: exprRange,
-		}
-	}
-
-	// Check if it's a function call
-	if strings.Contains(text, "(") && strings.Contains(text, ")") {
-		fnNameEnd := strings.Index(text, "(")
-		fnName := strings.TrimSpace(text[:fnNameEnd])
-
-		// Very simple function call parsing, just as a placeholder
-		return &types.FunctionCallExpr{
-			Name:      fnName,
-			Args:      []types.Expression{},
 			ExprRange: exprRange,
 		}
 	}
