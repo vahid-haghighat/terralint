@@ -1336,16 +1336,416 @@ func createComplexVariableExpected() types.Body {
 						Name:  "description",
 						Value: &types.LiteralValue{Value: "A complex object with nested types and validations", ValueType: "string"},
 					},
+
 					&types.Attribute{
-						Name:  "type",
-						Value: &types.TypeExpr{TypeName: "object"},
+						Name: "type",
+						Value: &types.TypeExpr{
+							TypeName: "object",
+							Parameters: []types.Expression{
+								&types.ObjectExpr{
+									Items: []types.ObjectItem{
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"name"}},
+											Value: &types.ReferenceExpr{Parts: []string{"string"}},
+										},
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
+											Value: &types.ReferenceExpr{Parts: []string{"string"}},
+										},
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"enabled"}},
+											Value: &types.ReferenceExpr{Parts: []string{"bool"}},
+										},
+										{
+											Key:   &types.ReferenceExpr{Parts: []string{"count"}},
+											Value: &types.ReferenceExpr{Parts: []string{"number"}},
+										},
+										{
+											Key: &types.ReferenceExpr{Parts: []string{"tags"}},
+											Value: &types.TypeExpr{
+												TypeName: "map",
+												Parameters: []types.Expression{
+													&types.ReferenceExpr{Parts: []string{"string"}},
+												},
+											},
+										},
+										{
+											Key: &types.ReferenceExpr{Parts: []string{"vpc"}},
+											Value: &types.TypeExpr{
+												TypeName: "object",
+												Parameters: []types.Expression{
+													&types.ObjectExpr{
+														Items: []types.ObjectItem{
+															{
+																Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																Value: &types.ReferenceExpr{Parts: []string{"string"}},
+															},
+															{
+																Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
+																Value: &types.ReferenceExpr{Parts: []string{"string"}},
+															},
+															{
+																Key: &types.ReferenceExpr{Parts: []string{"private_subnets"}},
+																Value: &types.TypeExpr{
+																	TypeName: "list",
+																	Parameters: []types.Expression{
+																		&types.TypeExpr{
+																			TypeName: "object",
+																			Parameters: []types.Expression{
+																				&types.ObjectExpr{
+																					Items: []types.ObjectItem{
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"az"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																					},
+																				},
+																			},
+																		},
+																	},
+																},
+															},
+															{
+																Key: &types.ReferenceExpr{Parts: []string{"public_subnets"}},
+																Value: &types.TypeExpr{
+																	TypeName: "list",
+																	Parameters: []types.Expression{
+																		&types.TypeExpr{
+																			TypeName: "object",
+																			Parameters: []types.Expression{
+																				&types.ObjectExpr{
+																					Items: []types.ObjectItem{
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"az"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																					},
+																				},
+																			},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+
+										{
+											Key: &types.ReferenceExpr{Parts: []string{"instances"}},
+											Value: &types.TypeExpr{
+												TypeName: "list",
+												Parameters: []types.Expression{
+													&types.TypeExpr{
+														TypeName: "object",
+														Parameters: []types.Expression{
+															&types.ObjectExpr{
+																Items: []types.ObjectItem{
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"subnet_id"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"public_ip"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "optional",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"string"}},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"root_volume"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "object",
+																			Parameters: []types.Expression{
+																				&types.ObjectExpr{
+																					Items: []types.ObjectItem{
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"size"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"number"}},
+																						},
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																						},
+																						{
+																							Key:   &types.ReferenceExpr{Parts: []string{"encrypted"}},
+																							Value: &types.ReferenceExpr{Parts: []string{"bool"}},
+																						},
+																					},
+																				},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"data_volumes"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "list",
+																			Parameters: []types.Expression{
+																				&types.TypeExpr{
+																					TypeName: "object",
+																					Parameters: []types.Expression{
+																						&types.ObjectExpr{
+																							Items: []types.ObjectItem{
+																								{
+																									Key:   &types.ReferenceExpr{Parts: []string{"device_name"}},
+																									Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																								},
+																								{
+																									Key:   &types.ReferenceExpr{Parts: []string{"size"}},
+																									Value: &types.ReferenceExpr{Parts: []string{"number"}},
+																								},
+																								{
+																									Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+																									Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																								},
+																								{
+																									Key:   &types.ReferenceExpr{Parts: []string{"encrypted"}},
+																									Value: &types.ReferenceExpr{Parts: []string{"bool"}},
+																								},
+																								{
+																									Key: &types.ReferenceExpr{Parts: []string{"iops"}},
+																									Value: &types.TypeExpr{
+																										TypeName: "optional",
+																										Parameters: []types.Expression{
+																											&types.ReferenceExpr{Parts: []string{"number"}},
+																										},
+																									},
+																								},
+																								{
+																									Key: &types.ReferenceExpr{Parts: []string{"throughput"}},
+																									Value: &types.TypeExpr{
+																										TypeName: "optional",
+																										Parameters: []types.Expression{
+																											&types.ReferenceExpr{Parts: []string{"number"}},
+																										},
+																									},
+																								},
+																							},
+																						},
+																					},
+																				},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"tags"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "map",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"string"}},
+																			},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+
+										{
+											Key: &types.ReferenceExpr{Parts: []string{"databases"}},
+											Value: &types.TypeExpr{
+												TypeName: "map",
+												Parameters: []types.Expression{
+													&types.TypeExpr{
+														TypeName: "object",
+														Parameters: []types.Expression{
+															&types.ObjectExpr{
+																Items: []types.ObjectItem{
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"engine"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"version"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"instance_class"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"allocated_storage"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"number"}},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"max_allocated_storage"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "optional",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"number"}},
+																			},
+																		},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"multi_az"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"bool"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"backup_retention_period"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"number"}},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"parameters"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "map",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"string"}},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"subnet_ids"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "list",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"string"}},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"security_group_ids"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "list",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"string"}},
+																			},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+										{
+											Key: &types.ReferenceExpr{Parts: []string{"endpoints"}},
+											Value: &types.TypeExpr{
+												TypeName: "map",
+												Parameters: []types.Expression{
+													&types.TypeExpr{
+														TypeName: "object",
+														Parameters: []types.Expression{
+															&types.ObjectExpr{
+																Items: []types.ObjectItem{
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"service"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key:   &types.ReferenceExpr{Parts: []string{"vpc_endpoint_type"}},
+																		Value: &types.ReferenceExpr{Parts: []string{"string"}},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"subnet_ids"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "optional",
+																			Parameters: []types.Expression{
+																				&types.TypeExpr{
+																					TypeName: "list",
+																					Parameters: []types.Expression{
+																						&types.ReferenceExpr{Parts: []string{"string"}},
+																					},
+																				},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"security_group_ids"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "optional",
+																			Parameters: []types.Expression{
+																				&types.TypeExpr{
+																					TypeName: "list",
+																					Parameters: []types.Expression{
+																						&types.ReferenceExpr{Parts: []string{"string"}},
+																					},
+																				},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"private_dns_enabled"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "optional",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"bool"}},
+																			},
+																		},
+																	},
+																	{
+																		Key: &types.ReferenceExpr{Parts: []string{"policy"}},
+																		Value: &types.TypeExpr{
+																			TypeName: "optional",
+																			Parameters: []types.Expression{
+																				&types.ReferenceExpr{Parts: []string{"string"}},
+																			},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 					&types.Block{
 						Type: "validation",
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "condition",
-								Value: &types.BinaryExpr{},
+								Name: "condition",
+								Value: &types.BinaryExpr{
+									Left: &types.BinaryExpr{
+										Left:     &types.ReferenceExpr{Parts: []string{"var", "complex_object", "count"}},
+										Operator: ">",
+										Right:    &types.LiteralValue{Value: 0, ValueType: "number"},
+									},
+									Operator: "&&",
+									Right: &types.BinaryExpr{
+										Left:     &types.ReferenceExpr{Parts: []string{"var", "complex_object", "count"}},
+										Operator: "<=",
+										Right:    &types.LiteralValue{Value: 10, ValueType: "number"},
+									},
+								},
 							},
 							&types.Attribute{
 								Name:  "error_message",
@@ -1357,8 +1757,19 @@ func createComplexVariableExpected() types.Body {
 						Type: "validation",
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "condition",
-								Value: &types.FunctionCallExpr{Name: "can"},
+								Name: "condition",
+								Value: &types.FunctionCallExpr{
+									Name: "can",
+									Args: []types.Expression{
+										&types.FunctionCallExpr{
+											Name: "regex",
+											Args: []types.Expression{
+												&types.LiteralValue{Value: "^(dev|staging|prod)$", ValueType: "string"},
+												&types.ReferenceExpr{Parts: []string{"var", "complex_object", "environment"}},
+											},
+										},
+									},
+								},
 							},
 							&types.Attribute{
 								Name:  "error_message",
@@ -1370,8 +1781,17 @@ func createComplexVariableExpected() types.Body {
 						Type: "validation",
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "condition",
-								Value: &types.FunctionCallExpr{Name: "length"},
+								Name: "condition",
+								Value: &types.BinaryExpr{
+									Left: &types.FunctionCallExpr{
+										Name: "length",
+										Args: []types.Expression{
+											&types.ReferenceExpr{Parts: []string{"var", "complex_object", "vpc", "private_subnets"}},
+										},
+									},
+									Operator: ">",
+									Right:    &types.LiteralValue{Value: 0, ValueType: "number"},
+								},
 							},
 							&types.Attribute{
 								Name:  "error_message",
@@ -1383,8 +1803,33 @@ func createComplexVariableExpected() types.Body {
 						Type: "validation",
 						Children: []types.Body{
 							&types.Attribute{
-								Name:  "condition",
-								Value: &types.FunctionCallExpr{Name: "alltrue"},
+								Name: "condition",
+								Value: &types.FunctionCallExpr{
+									Name: "alltrue",
+									Args: []types.Expression{
+										&types.ArrayExpr{
+											Items: []types.Expression{
+												&types.ForExpr{
+													ValueVar:   "instance",
+													Collection: &types.ReferenceExpr{Parts: []string{"var", "complex_object", "instances"}},
+													ThenKeyExpr: &types.BinaryExpr{
+														Left: &types.BinaryExpr{
+															Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "size"}},
+															Operator: ">=",
+															Right:    &types.LiteralValue{Value: 20, ValueType: "number"},
+														},
+														Operator: "&&",
+														Right: &types.BinaryExpr{
+															Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "encrypted"}},
+															Operator: "==",
+															Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 							&types.Attribute{
 								Name:  "error_message",
@@ -1413,10 +1858,108 @@ func createComplexOutputExpected() types.Body {
 					},
 					&types.Attribute{
 						Name: "value",
-						Value: &types.ForExpr{
-							KeyVar:     "sg_key",
-							ValueVar:   "sg",
-							Collection: &types.ReferenceExpr{Parts: []string{"aws_security_group", "complex"}},
+						Value: &types.ObjectExpr{
+							Items: []types.ObjectItem{
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"vpc_id"}},
+									Value: &types.ReferenceExpr{Parts: []string{"module", "complex_module", "vpc_id"}},
+								},
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"subnet_ids"}},
+									Value: &types.ReferenceExpr{Parts: []string{"module", "complex_module", "subnet_ids"}},
+								},
+								{
+									Key: &types.ReferenceExpr{Parts: []string{"security_group_id"}},
+									Value: &types.ArrayExpr{
+										Items: []types.Expression{
+											&types.ForExpr{
+												ValueVar:    "sg",
+												KeyVar:      "sg_key",
+												Collection:  &types.ReferenceExpr{Parts: []string{"aws_security_group", "complex"}},
+												ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"sg", "id"}},
+											},
+										},
+									},
+								},
+								{
+									Key: &types.ReferenceExpr{Parts: []string{"instance_details"}},
+									Value: &types.ForExpr{
+										KeyVar:      "instance",
+										Collection:  &types.ReferenceExpr{Parts: []string{"local", "filtered_instances"}},
+										ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"instance", "id"}},
+										ThenValueExpr: &types.ObjectExpr{
+											Items: []types.ObjectItem{
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"name"}},
+													Value: &types.ReferenceExpr{Parts: []string{"instance", "name"}},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
+													Value: &types.ReferenceExpr{Parts: []string{"instance", "private_ip"}},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"public_ip"}},
+													Value: &types.ReferenceExpr{Parts: []string{"instance", "public_ip"}},
+												},
+												{
+													Key: &types.ReferenceExpr{Parts: []string{"subnet"}},
+													Value: &types.ObjectExpr{
+														Items: []types.ObjectItem{
+															{
+																Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+																Value: &types.ReferenceExpr{Parts: []string{"instance", "subnet_id"}},
+															},
+															{
+																Key: &types.ReferenceExpr{Parts: []string{"details"}},
+																Value: &types.FunctionCallExpr{
+																	Name: "lookup",
+																	Args: []types.Expression{
+																		&types.ReferenceExpr{Parts: []string{"local", "subnet_map"}},
+																		&types.ReferenceExpr{Parts: []string{"instance", "subnet_id"}},
+																		&types.LiteralValue{Value: nil, ValueType: "null"},
+																	},
+																},
+															},
+														},
+													},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
+													Value: &types.ReferenceExpr{Parts: []string{"instance", "environment"}},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+													Value: &types.ReferenceExpr{Parts: []string{"instance", "type"}},
+												},
+												{
+													Key:   &types.ReferenceExpr{Parts: []string{"tags"}},
+													Value: &types.ReferenceExpr{Parts: []string{"instance", "tags"}},
+												},
+											},
+										},
+									},
+								},
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"backup_enabled"}},
+									Value: &types.ReferenceExpr{Parts: []string{"var", "enable_backups"}},
+								},
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"backup_config"}},
+									Value: &types.ReferenceExpr{Parts: []string{"var", "backup_config"}},
+								},
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"naming_convention"}},
+									Value: &types.ReferenceExpr{Parts: []string{"local", "naming_convention"}},
+								},
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"complex_calculation"}},
+									Value: &types.ReferenceExpr{Parts: []string{"module", "complex_module", "complex_calculation"}},
+								},
+								{
+									Key:   &types.ReferenceExpr{Parts: []string{"policy_document"}},
+									Value: &types.ReferenceExpr{Parts: []string{"data", "aws_iam_policy_document", "complex", "json"}},
+								},
+							},
 						},
 					},
 					&types.Attribute{
@@ -1424,8 +1967,14 @@ func createComplexOutputExpected() types.Body {
 						Value: &types.LiteralValue{Value: true, ValueType: "bool"},
 					},
 					&types.Attribute{
-						Name:  "depends_on",
-						Value: &types.ArrayExpr{},
+						Name: "depends_on",
+						Value: &types.ArrayExpr{
+							Items: []types.Expression{
+								&types.ReferenceExpr{Parts: []string{"module", "complex_module"}},
+								&types.ReferenceExpr{Parts: []string{"aws_security_group", "complex"}},
+								&types.ReferenceExpr{Parts: []string{"data", "aws_iam_policy_document", "complex"}},
+							},
+						},
 					},
 				},
 			},
