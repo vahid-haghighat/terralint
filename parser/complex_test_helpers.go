@@ -167,42 +167,38 @@ func createComplexModuleExpected() types.Body {
 					&types.Attribute{
 						Name:         "subnet_cidrs",
 						BlockComment: "// Complex for expression with filtering and transformation",
-						Value: &types.ArrayExpr{
-							Items: []types.Expression{
-								&types.ForExpr{
-									KeyVar:     "i",
-									ValueVar:   "subnet",
-									Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
-									ThenKeyExpr: &types.FunctionCallExpr{
-										Name: "cidrsubnet",
-										Args: []types.Expression{
-											&types.ReferenceExpr{Parts: []string{"var", "base_cidr_block"}},
-											&types.LiteralValue{Value: 8, ValueType: "number"},
-											&types.BinaryExpr{
-												Left:     &types.ReferenceExpr{Parts: []string{"i"}},
-												Operator: "+",
-												Right:    &types.LiteralValue{Value: 10, ValueType: "number"},
-											},
-										},
-									},
-									Condition: &types.BinaryExpr{
-										Left:     &types.ReferenceExpr{Parts: []string{"subnet", "create"}},
-										Operator: "==",
-										Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
+						Value: &types.ForArrayExpr{
+							KeyVar:     "i",
+							ValueVar:   "subnet",
+							Collection: &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
+							ThenValueExpr: &types.FunctionCallExpr{
+								Name: "cidrsubnet",
+								Args: []types.Expression{
+									&types.ReferenceExpr{Parts: []string{"var", "base_cidr_block"}},
+									&types.LiteralValue{Value: 8, ValueType: "number"},
+									&types.BinaryExpr{
+										Left:     &types.ReferenceExpr{Parts: []string{"i"}},
+										Operator: "+",
+										Right:    &types.LiteralValue{Value: 10, ValueType: "number"},
 									},
 								},
+							},
+							Condition: &types.BinaryExpr{
+								Left:     &types.ReferenceExpr{Parts: []string{"subnet", "create"}},
+								Operator: "==",
+								Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
 							},
 						},
 					},
 					&types.Attribute{
 						Name:         "subnet_configs",
 						BlockComment: "// Nested for expressions with conditional",
-						Value: &types.ForExpr{
+						Value: &types.ForMapExpr{
 							KeyVar:      "zone_key",
 							ValueVar:    "zone",
 							Collection:  &types.ReferenceExpr{Parts: []string{"var", "availability_zones"}},
 							ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"zone_key"}},
-							ThenValueExpr: &types.ForExpr{
+							ThenValueExpr: &types.ForMapExpr{
 								KeyVar:      "subnet_key",
 								ValueVar:    "subnet",
 								Collection:  &types.ReferenceExpr{Parts: []string{"var", "subnet_types"}},
@@ -297,23 +293,15 @@ func createComplexModuleExpected() types.Body {
 						Value: &types.FunctionCallExpr{
 							Name: "flatten",
 							Args: []types.Expression{
-								&types.ArrayExpr{
-									Items: []types.Expression{
-										&types.ForExpr{
-											KeyVar:     "zone_key",
-											ValueVar:   "zone",
-											Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
-											ThenKeyExpr: &types.ArrayExpr{
-												Items: []types.Expression{
-													&types.ForExpr{
-														KeyVar:      "subnet_key",
-														ValueVar:    "subnet",
-														Collection:  &types.ReferenceExpr{Parts: []string{"zone"}},
-														ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
-													},
-												},
-											},
-										},
+								&types.ForArrayExpr{
+									KeyVar:     "zone_key",
+									ValueVar:   "zone",
+									Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
+									ThenValueExpr: &types.ForArrayExpr{
+										KeyVar:        "subnet_key",
+										ValueVar:      "subnet",
+										Collection:    &types.ReferenceExpr{Parts: []string{"zone"}},
+										ThenValueExpr: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
 									},
 								},
 							},
@@ -513,26 +501,22 @@ func createComplexModuleExpected() types.Body {
 										},
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"subnets"}},
-											Value: &types.ArrayExpr{
-												Items: []types.Expression{
-													&types.ForExpr{
-														KeyVar:     "subnet",
-														Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
-														ThenKeyExpr: &types.ObjectExpr{
-															Items: []types.ObjectItem{
-																{
-																	Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-																	Value: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
-																},
-																{
-																	Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
-																	Value: &types.ReferenceExpr{Parts: []string{"subnet", "cidr_block"}},
-																},
-																{
-																	Key:   &types.ReferenceExpr{Parts: []string{"az"}},
-																	Value: &types.ReferenceExpr{Parts: []string{"subnet", "availability_zone"}},
-																},
-															},
+											Value: &types.ForArrayExpr{
+												KeyVar:     "subnet",
+												Collection: &types.ReferenceExpr{Parts: []string{"aws_subnet", "main"}},
+												ThenValueExpr: &types.ObjectExpr{
+													Items: []types.ObjectItem{
+														{
+															Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+															Value: &types.ReferenceExpr{Parts: []string{"subnet", "id"}},
+														},
+														{
+															Key:   &types.ReferenceExpr{Parts: []string{"cidr"}},
+															Value: &types.ReferenceExpr{Parts: []string{"subnet", "cidr_block"}},
+														},
+														{
+															Key:   &types.ReferenceExpr{Parts: []string{"az"}},
+															Value: &types.ReferenceExpr{Parts: []string{"subnet", "availability_zone"}},
 														},
 													},
 												},
@@ -636,23 +620,19 @@ func createComplexModuleExpected() types.Body {
 												Right:    &types.LiteralValue{Value: nil, ValueType: "null"},
 											},
 											TrueExpr: &types.ReferenceExpr{Parts: []string{"rule", "value", "cidr_blocks"}},
-											FalseExpr: &types.ArrayExpr{
-												Items: []types.Expression{
-													&types.ForExpr{
-														KeyVar:     "cidr",
-														Collection: &types.ReferenceExpr{Parts: []string{"var", "default_cidrs"}},
-														ThenKeyExpr: &types.ReferenceExpr{
-															Parts: []string{"cidr"},
-														},
-														Condition: &types.UnaryExpr{
-															Operator: "!",
-															Expr: &types.FunctionCallExpr{
-																Name: "contains",
-																Args: []types.Expression{
-																	&types.ReferenceExpr{Parts: []string{"var", "excluded_cidrs"}},
-																	&types.ReferenceExpr{Parts: []string{"cidr"}},
-																},
-															},
+											FalseExpr: &types.ForArrayExpr{
+												KeyVar:     "cidr",
+												Collection: &types.ReferenceExpr{Parts: []string{"var", "default_cidrs"}},
+												ThenValueExpr: &types.ReferenceExpr{
+													Parts: []string{"cidr"},
+												},
+												Condition: &types.UnaryExpr{
+													Operator: "!",
+													Expr: &types.FunctionCallExpr{
+														Name: "contains",
+														Args: []types.Expression{
+															&types.ReferenceExpr{Parts: []string{"var", "excluded_cidrs"}},
+															&types.ReferenceExpr{Parts: []string{"cidr"}},
 														},
 													},
 												},
@@ -729,7 +709,7 @@ func createComplexResourceExpected() types.Body {
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "for_each",
-						Value: &types.ForExpr{
+						Value: &types.ForMapExpr{
 							KeyVar:        "sg",
 							Collection:    &types.ReferenceExpr{Parts: []string{"var", "security_groups"}},
 							ThenKeyExpr:   &types.ReferenceExpr{Parts: []string{"sg", "name"}},
@@ -1032,8 +1012,8 @@ func createComplexLocalsExpected() types.Body {
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "subnet_map",
-						Value: &types.ForExpr{
-							ValueVar:    "subnet",
+						Value: &types.ForMapExpr{
+							KeyVar:      "subnet",
 							Collection:  &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
 							ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"subnet", "name"}},
 							ThenValueExpr: &types.ObjectExpr{
@@ -1067,14 +1047,12 @@ func createComplexLocalsExpected() types.Body {
 										Value: &types.ConditionalExpr{
 											Condition: &types.ReferenceExpr{Parts: []string{"subnet", "public"}},
 											TrueExpr:  &types.ArrayExpr{Items: []types.Expression{}},
-											FalseExpr: &types.ArrayExpr{Items: []types.Expression{
-												&types.ForExpr{
-													ValueVar:      "s",
-													Collection:    &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
-													ThenValueExpr: &types.ReferenceExpr{Parts: []string{"s", "id"}},
-													Condition:     &types.ReferenceExpr{Parts: []string{"s", "public"}},
-												},
-											}},
+											FalseExpr: &types.ForArrayExpr{
+												ValueVar:      "s",
+												Collection:    &types.ReferenceExpr{Parts: []string{"var", "subnets"}},
+												ThenValueExpr: &types.ReferenceExpr{Parts: []string{"s", "id"}},
+												Condition:     &types.ReferenceExpr{Parts: []string{"s", "public"}},
+											},
 										},
 									},
 								},
@@ -1084,72 +1062,68 @@ func createComplexLocalsExpected() types.Body {
 					},
 					&types.Attribute{
 						Name: "filtered_instances",
-						Value: &types.ArrayExpr{
-							Items: []types.Expression{
-								&types.ForExpr{
-									ValueVar:   "server",
-									Collection: &types.ReferenceExpr{Parts: []string{"var", "servers"}},
-									ThenKeyExpr: &types.ObjectExpr{
-										Items: []types.ObjectItem{
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "id"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"name"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "name"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "environment"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"type"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "type"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"subnet_id"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "subnet_id"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "private_ip"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"public_ip"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "public_ip"}},
-											},
-											{
-												Key:   &types.ReferenceExpr{Parts: []string{"tags"}},
-												Value: &types.ReferenceExpr{Parts: []string{"server", "tags"}},
-											},
+						Value: &types.ForArrayExpr{
+							KeyVar:     "server",
+							Collection: &types.ReferenceExpr{Parts: []string{"var", "servers"}},
+							ThenValueExpr: &types.ObjectExpr{
+								Items: []types.ObjectItem{
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "id"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"name"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "name"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"environment"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "environment"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"type"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "type"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"subnet_id"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "subnet_id"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"private_ip"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "private_ip"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"public_ip"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "public_ip"}},
+									},
+									{
+										Key:   &types.ReferenceExpr{Parts: []string{"tags"}},
+										Value: &types.ReferenceExpr{Parts: []string{"server", "tags"}},
+									},
+								},
+							},
+							Condition: &types.BinaryExpr{
+								Left: &types.BinaryExpr{
+									Left:     &types.ReferenceExpr{Parts: []string{"server", "environment"}},
+									Operator: "==",
+									Right:    &types.ReferenceExpr{Parts: []string{"var", "environment"}},
+								},
+								Operator: "&&",
+								Right: &types.BinaryExpr{
+									Left: &types.FunctionCallExpr{
+										Name: "contains",
+										Args: []types.Expression{
+											&types.ReferenceExpr{Parts: []string{"var", "allowed_types"}},
+											&types.ReferenceExpr{Parts: []string{"server", "type"}},
 										},
 									},
-									Condition: &types.BinaryExpr{
-										Left: &types.BinaryExpr{
-											Left:     &types.ReferenceExpr{Parts: []string{"server", "environment"}},
-											Operator: "==",
-											Right:    &types.ReferenceExpr{Parts: []string{"var", "environment"}},
-										},
-										Operator: "&&",
-										Right: &types.BinaryExpr{
-											Left: &types.FunctionCallExpr{
-												Name: "contains",
-												Args: []types.Expression{
-													&types.ReferenceExpr{Parts: []string{"var", "allowed_types"}},
-													&types.ReferenceExpr{Parts: []string{"server", "type"}},
-												},
-											},
-											Operator: "&&",
-											Right: &types.UnaryExpr{
-												Operator: "!",
-												Expr: &types.FunctionCallExpr{
-													Name: "contains",
-													Args: []types.Expression{
-														&types.ReferenceExpr{Parts: []string{"var", "excluded_ids"}},
-														&types.ReferenceExpr{Parts: []string{"server", "id"}},
-													},
-												},
+									Operator: "&&",
+									Right: &types.UnaryExpr{
+										Operator: "!",
+										Expr: &types.FunctionCallExpr{
+											Name: "contains",
+											Args: []types.Expression{
+												&types.ReferenceExpr{Parts: []string{"var", "excluded_ids"}},
+												&types.ReferenceExpr{Parts: []string{"server", "id"}},
 											},
 										},
 									},
@@ -1200,47 +1174,43 @@ func createComplexLocalsExpected() types.Body {
 									},
 									{
 										Key: &types.ReferenceExpr{Parts: []string{"targets"}},
-										Value: &types.ArrayExpr{
-											Items: []types.Expression{
-												&types.ForExpr{
-													KeyVar:     "target",
-													Collection: &types.ReferenceExpr{Parts: []string{"var", "backup_targets"}},
-													ThenKeyExpr: &types.ObjectExpr{
-														Items: []types.ObjectItem{
-															{
-																Key:   &types.ReferenceExpr{Parts: []string{"id"}},
-																Value: &types.ReferenceExpr{Parts: []string{"target", "id"}},
-															},
-															{
-																Key:   &types.ReferenceExpr{Parts: []string{"name"}},
-																Value: &types.ReferenceExpr{Parts: []string{"target", "name"}},
-															},
-															{
-																Key: &types.ReferenceExpr{Parts: []string{"priority"}},
-																Value: &types.FunctionCallExpr{
-																	Name: "lookup",
-																	Args: []types.Expression{
-																		&types.ReferenceExpr{Parts: []string{"target", "tags"}},
-																		&types.LiteralValue{Value: "backup-priority", ValueType: "string"},
-																		&types.LiteralValue{Value: "medium", ValueType: "string"},
-																	},
-																},
-															},
-														},
+										Value: &types.ForArrayExpr{
+											KeyVar:     "target",
+											Collection: &types.ReferenceExpr{Parts: []string{"var", "backup_targets"}},
+											ThenValueExpr: &types.ObjectExpr{
+												Items: []types.ObjectItem{
+													{
+														Key:   &types.ReferenceExpr{Parts: []string{"id"}},
+														Value: &types.ReferenceExpr{Parts: []string{"target", "id"}},
 													},
-													Condition: &types.BinaryExpr{
-														Left: &types.FunctionCallExpr{
+													{
+														Key:   &types.ReferenceExpr{Parts: []string{"name"}},
+														Value: &types.ReferenceExpr{Parts: []string{"target", "name"}},
+													},
+													{
+														Key: &types.ReferenceExpr{Parts: []string{"priority"}},
+														Value: &types.FunctionCallExpr{
 															Name: "lookup",
 															Args: []types.Expression{
 																&types.ReferenceExpr{Parts: []string{"target", "tags"}},
-																&types.LiteralValue{Value: "backup-enabled", ValueType: "string"},
-																&types.LiteralValue{Value: "false", ValueType: "string"},
+																&types.LiteralValue{Value: "backup-priority", ValueType: "string"},
+																&types.LiteralValue{Value: "medium", ValueType: "string"},
 															},
 														},
-														Operator: "==",
-														Right:    &types.LiteralValue{Value: "true", ValueType: "string"},
 													},
 												},
+											},
+											Condition: &types.BinaryExpr{
+												Left: &types.FunctionCallExpr{
+													Name: "lookup",
+													Args: []types.Expression{
+														&types.ReferenceExpr{Parts: []string{"target", "tags"}},
+														&types.LiteralValue{Value: "backup-enabled", ValueType: "string"},
+														&types.LiteralValue{Value: "false", ValueType: "string"},
+													},
+												},
+												Operator: "==",
+												Right:    &types.LiteralValue{Value: "true", ValueType: "string"},
 											},
 										},
 									},
@@ -2275,24 +2245,20 @@ func createComplexVariableExpected() types.Body {
 								Value: &types.FunctionCallExpr{
 									Name: "alltrue",
 									Args: []types.Expression{
-										&types.ArrayExpr{
-											Items: []types.Expression{
-												&types.ForExpr{
-													ValueVar:   "instance",
-													Collection: &types.ReferenceExpr{Parts: []string{"var", "complex_object", "instances"}},
-													ThenKeyExpr: &types.BinaryExpr{
-														Left: &types.BinaryExpr{
-															Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "size"}},
-															Operator: ">=",
-															Right:    &types.LiteralValue{Value: 20, ValueType: "number"},
-														},
-														Operator: "&&",
-														Right: &types.BinaryExpr{
-															Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "encrypted"}},
-															Operator: "==",
-															Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
-														},
-													},
+										&types.ForArrayExpr{
+											KeyVar:     "instance",
+											Collection: &types.ReferenceExpr{Parts: []string{"var", "complex_object", "instances"}},
+											ThenValueExpr: &types.BinaryExpr{
+												Left: &types.BinaryExpr{
+													Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "size"}},
+													Operator: ">=",
+													Right:    &types.LiteralValue{Value: 20, ValueType: "number"},
+												},
+												Operator: "&&",
+												Right: &types.BinaryExpr{
+													Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "encrypted"}},
+													Operator: "==",
+													Right:    &types.LiteralValue{Value: true, ValueType: "bool"},
 												},
 											},
 										},
@@ -2337,21 +2303,17 @@ func createComplexOutputExpected() types.Body {
 									Value: &types.ReferenceExpr{Parts: []string{"module", "complex_module", "subnet_ids"}},
 								},
 								{
-									Key: &types.ReferenceExpr{Parts: []string{"security_group_id"}},
-									Value: &types.ArrayExpr{
-										Items: []types.Expression{
-											&types.ForExpr{
-												ValueVar:    "sg",
-												KeyVar:      "sg_key",
-												Collection:  &types.ReferenceExpr{Parts: []string{"aws_security_group", "complex"}},
-												ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"sg", "id"}},
-											},
-										},
+									Key: &types.ReferenceExpr{Parts: []string{"security_group_ids"}},
+									Value: &types.ForArrayExpr{
+										ValueVar:      "sg",
+										KeyVar:        "sg_key",
+										Collection:    &types.ReferenceExpr{Parts: []string{"aws_security_group", "complex"}},
+										ThenValueExpr: &types.ReferenceExpr{Parts: []string{"sg", "id"}},
 									},
 								},
 								{
 									Key: &types.ReferenceExpr{Parts: []string{"instance_details"}},
-									Value: &types.ForExpr{
+									Value: &types.ForMapExpr{
 										KeyVar:      "instance",
 										Collection:  &types.ReferenceExpr{Parts: []string{"local", "filtered_instances"}},
 										ThenKeyExpr: &types.ReferenceExpr{Parts: []string{"instance", "id"}},
@@ -2413,7 +2375,7 @@ func createComplexOutputExpected() types.Body {
 								},
 								{
 									Key:   &types.ReferenceExpr{Parts: []string{"backup_config"}},
-									Value: &types.ReferenceExpr{Parts: []string{"var", "backup_config"}},
+									Value: &types.ReferenceExpr{Parts: []string{"local", "backup_config"}},
 								},
 								{
 									Key:   &types.ReferenceExpr{Parts: []string{"naming_convention"}},

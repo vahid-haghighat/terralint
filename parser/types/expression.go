@@ -142,32 +142,58 @@ func (b *BinaryExpr) Range() sitter.Range {
 	return b.ExprRange
 }
 
-// ForExpr represents for expressions: [for x in xs : upper(x)] or {for k, v in map : k => v}
-type ForExpr struct {
+// ForMapExpr represents for expressions: [for x in xs : upper(x)] or {for k, v in map : k => v}
+type ForMapExpr struct {
 	// Iterator variables
-	ValueVar string // The value variable name (e.g., "x" in "for x in xs" or "v" in "for k, v in map")
-	KeyVar   string // Optional key variable for maps (e.g., "k" in "for k, v in map")
+	ValueVar string // The value variable name (e.g. "v" in "for k, v in map")
+	KeyVar   string // The key variable for maps (e.g., "k" in "for k, v in map" or "x" in "for x in xs")
 
 	// Collection being iterated
 	Collection Expression // The collection being iterated over (e.g., "xs" in "for x in xs")
 
 	// Result expressions
-	ThenKeyExpr   Expression // The value expression (e.g., "upper(x)" in "for x in xs : upper(x)")
-	ThenValueExpr Expression // Optional value expression for map outputs (e.g., "v" in "for k, v in map : k => v")
+	ThenKeyExpr   Expression // The value expression (e.g., "k" in "for k, v in map : k => v")
+	ThenValueExpr Expression // The value expression for map outputs (e.g., "v" in "for k, v in map : k => v")
 
 	// Filtering and grouping
 	Condition Expression // Optional "if" condition (e.g., "x != null" in "for x in xs : x if x != null")
-	IsGrouped bool       // Whether this is a group by expression
 
 	// Source location
 	ExprRange sitter.Range
 }
 
-func (f *ForExpr) ExpressionType() string {
-	return "for"
+func (f *ForMapExpr) ExpressionType() string {
+	return "for_map"
 }
 
-func (f *ForExpr) Range() sitter.Range {
+func (f *ForMapExpr) Range() sitter.Range {
+	return f.ExprRange
+}
+
+// ForArrayExpr represents for expressions: [for x in xs : upper(x)]
+type ForArrayExpr struct {
+	// Iterator variables
+	ValueVar string // The value variable name (e.g. "v" in "for k, v in map")
+	KeyVar   string // The key variable for maps (e.g., "k" in "for k, v in map" or "x" in "for x in xs")
+
+	// Collection being iterated
+	Collection Expression // The collection being iterated over (e.g., "xs" in "for x in xs")
+
+	// Result expressions
+	ThenValueExpr Expression // The value expression for map outputs (e.g., "v" in "for k, v in map : k => v")
+
+	// Filtering and grouping
+	Condition Expression // Optional "if" condition (e.g., "x != null" in "for x in xs : x if x != null")
+
+	// Source location
+	ExprRange sitter.Range
+}
+
+func (f *ForArrayExpr) ExpressionType() string {
+	return "for_array"
+}
+
+func (f *ForArrayExpr) Range() sitter.Range {
 	return f.ExprRange
 }
 
