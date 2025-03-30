@@ -564,7 +564,7 @@ func createComplexModuleExpected() types.Body {
 							},
 							&types.Attribute{
 								Name:  "iterator",
-								Value: &types.LiteralValue{Value: "rule", ValueType: "string"},
+								Value: &types.ReferenceExpr{Parts: []string{"rule"}},
 							},
 							&types.Block{
 								Type: "content",

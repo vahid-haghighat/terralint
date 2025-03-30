@@ -67,9 +67,8 @@ func createSimpleTerraformExpected() types.Body {
 					},
 					&types.Attribute{
 						Name: "type",
-						Value: &types.LiteralValue{
-							Value:     "string",
-							ValueType: "string",
+						Value: &types.ReferenceExpr{
+							Parts: []string{"string"},
 						},
 					},
 					&types.Attribute{

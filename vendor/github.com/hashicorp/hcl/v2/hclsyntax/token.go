@@ -63,9 +63,8 @@ const (
 	TokenDot   TokenType = '.'
 	TokenComma TokenType = ','
 
-	TokenDoubleColon TokenType = '⸬'
-	TokenEllipsis    TokenType = '…'
-	TokenFatArrow    TokenType = '⇒'
+	TokenEllipsis TokenType = '…'
+	TokenFatArrow TokenType = '⇒'
 
 	TokenQuestion TokenType = '?'
 	TokenColon    TokenType = ':'

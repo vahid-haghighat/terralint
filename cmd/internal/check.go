@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/vahid-haghighat/terralint/parser"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/vahid-haghighat/terralint/parser"
 
 	"github.com/vahid-haghighat/terralint/parser/types"
 )
@@ -124,13 +125,15 @@ func printType(v interface{}, indent int) {
 	case *types.FunctionCallExpr:
 		fmt.Printf("&types.FunctionCallExpr{\n")
 		fmt.Printf("%sName: %q,\n", nextIndentStr, v.Name)
-		fmt.Printf("%sArgs: []types.Expression{\n", nextIndentStr)
-		for _, arg := range v.Args {
-			fmt.Printf("%s", strings.Repeat("    ", indent+2))
-			printType(arg, indent+2)
-			fmt.Printf(",\n")
+		if len(v.Args) > 0 {
+			fmt.Printf("%sArgs: []types.Expression{\n", nextIndentStr)
+			for _, arg := range v.Args {
+				fmt.Printf("%s", nextIndentStr)
+				printType(arg, indent+2)
+				fmt.Printf(",\n")
+			}
+			fmt.Printf("%s},\n", nextIndentStr)
 		}
-		fmt.Printf("%s},\n", nextIndentStr)
 		fmt.Printf("%s}", indentStr)
 
 	case *types.TemplateExpr:
@@ -188,66 +191,57 @@ func printType(v interface{}, indent int) {
 
 		fmt.Printf("%s}", indentStr)
 
-	case *types.ForExpr:
-		fmt.Printf("&types.ForExpr{\n")
+	case *types.ForArrayExpr, *types.ForMapExpr:
+		// Handle for expressions
+		var collection, condition types.Expression
 
-		// Handle iterator variables
-		if v.ValueVar != "" {
+		switch v := v.(type) {
+		case *types.ForArrayExpr:
+			collection = v.Collection
+			condition = v.Condition
+			fmt.Printf("&types.ForArrayExpr{\n")
 			fmt.Printf("%sValueVar: %q,\n", nextIndentStr, v.ValueVar)
+			if v.KeyVar != "" {
+				fmt.Printf("%sKeyVar: %q,\n", nextIndentStr, v.KeyVar)
+			}
+		case *types.ForMapExpr:
+			collection = v.Collection
+			condition = v.Condition
+			fmt.Printf("&types.ForMapExpr{\n")
+			fmt.Printf("%sValueVar: %q,\n", nextIndentStr, v.ValueVar)
+			if v.KeyVar != "" {
+				fmt.Printf("%sKeyVar: %q,\n", nextIndentStr, v.KeyVar)
+			}
 		}
 
-		if v.KeyVar != "" {
-			fmt.Printf("%sKeyVar: %q,\n", nextIndentStr, v.KeyVar)
-		}
-
-		// Handle collection expression
-		if v.Collection != nil {
+		// Print collection
+		if collection != nil {
 			fmt.Printf("%sCollection: ", nextIndentStr)
-			printType(v.Collection, indent+1)
+			printType(collection, indent+1)
 			fmt.Printf(",\n")
 		}
 
-		// Handle result expressions
-		if v.ThenKeyExpr != nil {
-			fmt.Printf("%sThenKeyExpr: ", nextIndentStr)
-			printType(v.ThenKeyExpr, indent+1)
-			fmt.Printf(",\n")
-		}
-
-		if v.ThenValueExpr != nil {
-			fmt.Printf("%sThenValueExpr: ", nextIndentStr)
-			printType(v.ThenValueExpr, indent+1)
-			fmt.Printf(",\n")
-		}
-
-		// Handle filtering and grouping
-		if v.Condition != nil {
+		// Print condition if present
+		if condition != nil {
 			fmt.Printf("%sCondition: ", nextIndentStr)
-			printType(v.Condition, indent+1)
+			printType(condition, indent+1)
 			fmt.Printf(",\n")
-		}
-
-		if v.IsGrouped {
-			fmt.Printf("%sIsGrouped: true,\n", nextIndentStr)
 		}
 
 		fmt.Printf("%s}", indentStr)
 
 	case *types.SplatExpr:
 		fmt.Printf("&types.SplatExpr{\n")
-
 		if v.Source != nil {
 			fmt.Printf("%sSource: ", nextIndentStr)
 			printType(v.Source, indent+1)
 			fmt.Printf(",\n")
 		}
-
 		if v.Each != nil {
 			fmt.Printf("%sEach: ", nextIndentStr)
 			printType(v.Each, indent+1)
 			fmt.Printf(",\n")
 		}
-
 		fmt.Printf("%s}", indentStr)
 
 	case *types.HeredocExpr:
@@ -312,13 +306,11 @@ func printType(v interface{}, indent int) {
 
 	case *types.ParenExpr:
 		fmt.Printf("&types.ParenExpr{\n")
-
 		if v.Expression != nil {
 			fmt.Printf("%sExpression: ", nextIndentStr)
 			printType(v.Expression, indent+1)
 			fmt.Printf(",\n")
 		}
-
 		fmt.Printf("%s}", indentStr)
 
 	case *types.RelativeTraversalExpr:
@@ -406,25 +398,6 @@ func printType(v interface{}, indent int) {
 			for _, expr := range v.FalseExpr {
 				fmt.Printf("%s", strings.Repeat("    ", indent+2))
 				printType(expr, indent+2)
-				fmt.Printf(",\n")
-			}
-			fmt.Printf("%s},\n", nextIndentStr)
-		}
-
-		fmt.Printf("%s}", indentStr)
-
-	case *types.TypeExpr:
-		fmt.Printf("&types.TypeExpr{\n")
-
-		if v.TypeName != "" {
-			fmt.Printf("%sTypeName: %q,\n", nextIndentStr, v.TypeName)
-		}
-
-		if len(v.Parameters) > 0 {
-			fmt.Printf("%sParameters: []types.Expression{\n", nextIndentStr)
-			for _, param := range v.Parameters {
-				fmt.Printf("%s", strings.Repeat("    ", indent+2))
-				printType(param, indent+2)
 				fmt.Printf(",\n")
 			}
 			fmt.Printf("%s},\n", nextIndentStr)
@@ -651,37 +624,38 @@ func getExpressionSummary(expr types.Expression) string {
 		return fmt.Sprintf("Reference(%s)", strings.Join(e.Parts, "."))
 	case *types.FunctionCallExpr:
 		return fmt.Sprintf("FunctionCall(%s, %d args)", e.Name, len(e.Args))
-	case *types.ForExpr:
-		summary := "ForExpr["
-		// Show the variable and collection
-		if e.KeyVar != "" {
-			summary += fmt.Sprintf("for %s, %s in %s",
-				e.KeyVar, e.ValueVar, getExpressionSummary(e.Collection))
-		} else {
-			summary += fmt.Sprintf("for %s in %s",
-				e.ValueVar, getExpressionSummary(e.Collection))
-		}
+	case *types.ForArrayExpr, *types.ForMapExpr:
+		// Handle for expressions
+		var collection, condition types.Expression
 
-		// Show the value expression
-		if e.ThenKeyExpr != nil {
-			summary += fmt.Sprintf(": %s", getExpressionSummary(e.ThenKeyExpr))
+		switch e := e.(type) {
+		case *types.ForArrayExpr:
+			collection = e.Collection
+			condition = e.Condition
+			return fmt.Sprintf("for %s in %s%s",
+				e.ValueVar,
+				getExpressionSummary(collection),
+				conditionSummary(condition))
+		case *types.ForMapExpr:
+			collection = e.Collection
+			condition = e.Condition
+			return fmt.Sprintf("for %s, %s in %s%s",
+				e.KeyVar,
+				e.ValueVar,
+				getExpressionSummary(collection),
+				conditionSummary(condition))
 		}
-
-		// Show key expression if present (for map outputs)
-		if e.ThenValueExpr != nil {
-			summary += fmt.Sprintf(" => %s", getExpressionSummary(e.ThenValueExpr))
-		}
-
-		// Show condition if present
-		if e.Condition != nil {
-			summary += fmt.Sprintf(" if %s", getExpressionSummary(e.Condition))
-		}
-
-		summary += "]"
-		return summary
+		return fmt.Sprintf("%T", e)
 	default:
 		return fmt.Sprintf("%T", e)
 	}
+}
+
+func conditionSummary(condition types.Expression) string {
+	if condition != nil {
+		return fmt.Sprintf(" if %s", getExpressionSummary(condition))
+	}
+	return ""
 }
 
 func compare(original []byte, formatted []byte) error {
