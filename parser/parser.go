@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	. "github.com/hashicorp/hcl/v2/hclsyntax"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/vahid-haghighat/terralint/parser/types"
 	"github.com/zclconf/go-cty/cty"
@@ -384,36 +383,36 @@ func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
 		switch e.Op.Type {
 		case cty.Number:
 			switch e.Op {
-			case OpAdd:
+			case hclsyntax.OpAdd:
 				operator = "+"
-			case OpSubtract:
+			case hclsyntax.OpSubtract:
 				operator = "-"
-			case OpMultiply:
+			case hclsyntax.OpMultiply:
 				operator = "*"
-			case OpDivide:
+			case hclsyntax.OpDivide:
 				operator = "/"
-			case OpModulo:
+			case hclsyntax.OpModulo:
 				operator = "%"
 			default:
 				return nil, fmt.Errorf("unsupported numeric operator")
 			}
 		case cty.Bool:
 			switch e.Op {
-			case OpEqual:
+			case hclsyntax.OpEqual:
 				operator = "=="
-			case OpNotEqual:
+			case hclsyntax.OpNotEqual:
 				operator = "!="
-			case OpGreaterThan:
+			case hclsyntax.OpGreaterThan:
 				operator = ">"
-			case OpGreaterThanOrEqual:
+			case hclsyntax.OpGreaterThanOrEqual:
 				operator = ">="
-			case OpLessThan:
+			case hclsyntax.OpLessThan:
 				operator = "<"
-			case OpLessThanOrEqual:
+			case hclsyntax.OpLessThanOrEqual:
 				operator = "<="
-			case OpLogicalAnd:
+			case hclsyntax.OpLogicalAnd:
 				operator = "&&"
-			case OpLogicalOr:
+			case hclsyntax.OpLogicalOr:
 				operator = "||"
 			default:
 				return nil, fmt.Errorf("unsupported boolean operator")
@@ -421,31 +420,31 @@ func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
 		case cty.DynamicPseudoType:
 			// For dynamic types, we need to determine the operator based on the operation itself
 			switch e.Op {
-			case OpEqual:
+			case hclsyntax.OpEqual:
 				operator = "=="
-			case OpNotEqual:
+			case hclsyntax.OpNotEqual:
 				operator = "!="
-			case OpGreaterThan:
+			case hclsyntax.OpGreaterThan:
 				operator = ">"
-			case OpGreaterThanOrEqual:
+			case hclsyntax.OpGreaterThanOrEqual:
 				operator = ">="
-			case OpLessThan:
+			case hclsyntax.OpLessThan:
 				operator = "<"
-			case OpLessThanOrEqual:
+			case hclsyntax.OpLessThanOrEqual:
 				operator = "<="
-			case OpLogicalAnd:
+			case hclsyntax.OpLogicalAnd:
 				operator = "&&"
-			case OpLogicalOr:
+			case hclsyntax.OpLogicalOr:
 				operator = "||"
-			case OpAdd:
+			case hclsyntax.OpAdd:
 				operator = "+"
-			case OpSubtract:
+			case hclsyntax.OpSubtract:
 				operator = "-"
-			case OpMultiply:
+			case hclsyntax.OpMultiply:
 				operator = "*"
-			case OpDivide:
+			case hclsyntax.OpDivide:
 				operator = "/"
-			case OpModulo:
+			case hclsyntax.OpModulo:
 				operator = "%"
 			default:
 				return nil, fmt.Errorf("unsupported dynamic operator")
