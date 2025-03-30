@@ -1777,9 +1777,9 @@ func createComplexVariableExpected() types.Body {
 
 					&types.Attribute{
 						Name: "type",
-						Value: &types.TypeExpr{
-							TypeName: "object",
-							Parameters: []types.Expression{
+						Value: &types.FunctionCallExpr{
+							Name: "object",
+							Args: []types.Expression{
 								&types.ObjectExpr{
 									Items: []types.ObjectItem{
 										{
@@ -1800,18 +1800,18 @@ func createComplexVariableExpected() types.Body {
 										},
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"tags"}},
-											Value: &types.TypeExpr{
-												TypeName: "map",
-												Parameters: []types.Expression{
+											Value: &types.FunctionCallExpr{
+												Name: "map",
+												Args: []types.Expression{
 													&types.ReferenceExpr{Parts: []string{"string"}},
 												},
 											},
 										},
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"vpc"}},
-											Value: &types.TypeExpr{
-												TypeName: "object",
-												Parameters: []types.Expression{
+											Value: &types.FunctionCallExpr{
+												Name: "object",
+												Args: []types.Expression{
 													&types.ObjectExpr{
 														Items: []types.ObjectItem{
 															{
@@ -1824,12 +1824,12 @@ func createComplexVariableExpected() types.Body {
 															},
 															{
 																Key: &types.ReferenceExpr{Parts: []string{"private_subnets"}},
-																Value: &types.TypeExpr{
-																	TypeName: "list",
-																	Parameters: []types.Expression{
-																		&types.TypeExpr{
-																			TypeName: "object",
-																			Parameters: []types.Expression{
+																Value: &types.FunctionCallExpr{
+																	Name: "list",
+																	Args: []types.Expression{
+																		&types.FunctionCallExpr{
+																			Name: "object",
+																			Args: []types.Expression{
 																				&types.ObjectExpr{
 																					Items: []types.ObjectItem{
 																						{
@@ -1853,12 +1853,12 @@ func createComplexVariableExpected() types.Body {
 															},
 															{
 																Key: &types.ReferenceExpr{Parts: []string{"public_subnets"}},
-																Value: &types.TypeExpr{
-																	TypeName: "list",
-																	Parameters: []types.Expression{
-																		&types.TypeExpr{
-																			TypeName: "object",
-																			Parameters: []types.Expression{
+																Value: &types.FunctionCallExpr{
+																	Name: "list",
+																	Args: []types.Expression{
+																		&types.FunctionCallExpr{
+																			Name: "object",
+																			Args: []types.Expression{
 																				&types.ObjectExpr{
 																					Items: []types.ObjectItem{
 																						{
@@ -1888,12 +1888,12 @@ func createComplexVariableExpected() types.Body {
 
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"instances"}},
-											Value: &types.TypeExpr{
-												TypeName: "list",
-												Parameters: []types.Expression{
-													&types.TypeExpr{
-														TypeName: "object",
-														Parameters: []types.Expression{
+											Value: &types.FunctionCallExpr{
+												Name: "list",
+												Args: []types.Expression{
+													&types.FunctionCallExpr{
+														Name: "object",
+														Args: []types.Expression{
 															&types.ObjectExpr{
 																Items: []types.ObjectItem{
 																	{
@@ -1914,18 +1914,18 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"public_ip"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "optional",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "optional",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"string"}},
 																			},
 																		},
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"root_volume"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "object",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "object",
+																			Args: []types.Expression{
 																				&types.ObjectExpr{
 																					Items: []types.ObjectItem{
 																						{
@@ -1947,12 +1947,12 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"data_volumes"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "list",
-																			Parameters: []types.Expression{
-																				&types.TypeExpr{
-																					TypeName: "object",
-																					Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "list",
+																			Args: []types.Expression{
+																				&types.FunctionCallExpr{
+																					Name: "object",
+																					Args: []types.Expression{
 																						&types.ObjectExpr{
 																							Items: []types.ObjectItem{
 																								{
@@ -1973,18 +1973,18 @@ func createComplexVariableExpected() types.Body {
 																								},
 																								{
 																									Key: &types.ReferenceExpr{Parts: []string{"iops"}},
-																									Value: &types.TypeExpr{
-																										TypeName: "optional",
-																										Parameters: []types.Expression{
+																									Value: &types.FunctionCallExpr{
+																										Name: "optional",
+																										Args: []types.Expression{
 																											&types.ReferenceExpr{Parts: []string{"number"}},
 																										},
 																									},
 																								},
 																								{
 																									Key: &types.ReferenceExpr{Parts: []string{"throughput"}},
-																									Value: &types.TypeExpr{
-																										TypeName: "optional",
-																										Parameters: []types.Expression{
+																									Value: &types.FunctionCallExpr{
+																										Name: "optional",
+																										Args: []types.Expression{
 																											&types.ReferenceExpr{Parts: []string{"number"}},
 																										},
 																									},
@@ -1998,9 +1998,9 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"tags"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "map",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "map",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"string"}},
 																			},
 																		},
@@ -2015,12 +2015,12 @@ func createComplexVariableExpected() types.Body {
 
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"databases"}},
-											Value: &types.TypeExpr{
-												TypeName: "map",
-												Parameters: []types.Expression{
-													&types.TypeExpr{
-														TypeName: "object",
-														Parameters: []types.Expression{
+											Value: &types.FunctionCallExpr{
+												Name: "map",
+												Args: []types.Expression{
+													&types.FunctionCallExpr{
+														Name: "object",
+														Args: []types.Expression{
 															&types.ObjectExpr{
 																Items: []types.ObjectItem{
 																	{
@@ -2041,9 +2041,9 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"max_allocated_storage"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "optional",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "optional",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"number"}},
 																			},
 																		},
@@ -2057,28 +2057,28 @@ func createComplexVariableExpected() types.Body {
 																		Value: &types.ReferenceExpr{Parts: []string{"number"}},
 																	},
 																	{
-																		Key: &types.ReferenceExpr{Parts: []string{"parameters"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "map",
-																			Parameters: []types.Expression{
+																		Key: &types.ReferenceExpr{Parts: []string{"Args"}},
+																		Value: &types.FunctionCallExpr{
+																			Name: "map",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"string"}},
 																			},
 																		},
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"subnet_ids"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "list",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "list",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"string"}},
 																			},
 																		},
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"security_group_ids"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "list",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "list",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"string"}},
 																			},
 																		},
@@ -2092,12 +2092,12 @@ func createComplexVariableExpected() types.Body {
 										},
 										{
 											Key: &types.ReferenceExpr{Parts: []string{"endpoints"}},
-											Value: &types.TypeExpr{
-												TypeName: "map",
-												Parameters: []types.Expression{
-													&types.TypeExpr{
-														TypeName: "object",
-														Parameters: []types.Expression{
+											Value: &types.FunctionCallExpr{
+												Name: "map",
+												Args: []types.Expression{
+													&types.FunctionCallExpr{
+														Name: "object",
+														Args: []types.Expression{
 															&types.ObjectExpr{
 																Items: []types.ObjectItem{
 																	{
@@ -2110,12 +2110,12 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"subnet_ids"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "optional",
-																			Parameters: []types.Expression{
-																				&types.TypeExpr{
-																					TypeName: "list",
-																					Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "optional",
+																			Args: []types.Expression{
+																				&types.FunctionCallExpr{
+																					Name: "list",
+																					Args: []types.Expression{
 																						&types.ReferenceExpr{Parts: []string{"string"}},
 																					},
 																				},
@@ -2124,12 +2124,12 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"security_group_ids"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "optional",
-																			Parameters: []types.Expression{
-																				&types.TypeExpr{
-																					TypeName: "list",
-																					Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "optional",
+																			Args: []types.Expression{
+																				&types.FunctionCallExpr{
+																					Name: "list",
+																					Args: []types.Expression{
 																						&types.ReferenceExpr{Parts: []string{"string"}},
 																					},
 																				},
@@ -2138,18 +2138,18 @@ func createComplexVariableExpected() types.Body {
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"private_dns_enabled"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "optional",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "optional",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"bool"}},
 																			},
 																		},
 																	},
 																	{
 																		Key: &types.ReferenceExpr{Parts: []string{"policy"}},
-																		Value: &types.TypeExpr{
-																			TypeName: "optional",
-																			Parameters: []types.Expression{
+																		Value: &types.FunctionCallExpr{
+																			Name: "optional",
+																			Args: []types.Expression{
 																				&types.ReferenceExpr{Parts: []string{"string"}},
 																			},
 																		},
