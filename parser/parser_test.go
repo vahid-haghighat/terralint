@@ -26,9 +26,6 @@ func TestParser(t *testing.T) {
 			Description: "Simple Terraform file with basic constructs",
 			Expected:    createSimpleTerraformExpected(),
 		},
-		// Note: The original complex_terraform_test.tf file has been split into smaller files
-		// in the complex_terraform_split directory
-		// New test cases for split complex terraform files
 		{
 			Name:        "Complex Module",
 			FilePath:    "test_files/complex_terraform_split/01_complex_module.tf",
@@ -172,6 +169,18 @@ func compareBlocks(t *testing.T, expected, actual *types.Block) {
 		t.Errorf("Block type mismatch: expected %s, got %s", expected.Type, actual.Type)
 	}
 
+	// Check if the block comment matches
+	if expected.BlockComment != actual.BlockComment {
+		t.Errorf("Block comment mismatch for block %s: expected %q, got %q",
+			expected.Type, expected.BlockComment, actual.BlockComment)
+	}
+
+	// Check if the inline comment matches
+	if expected.InlineComment != actual.InlineComment {
+		t.Errorf("Inline comment mismatch for block %s: expected %q, got %q",
+			expected.Type, expected.InlineComment, actual.InlineComment)
+	}
+
 	// Check if the labels match
 	// Special case: if both are empty (nil or empty slice), consider them equal
 	if len(expected.Labels) == 0 && len(actual.Labels) == 0 {
@@ -225,6 +234,18 @@ func compareAttributes(t *testing.T, expected, actual *types.Attribute) {
 	// Check if the attribute name matches
 	if expected.Name != actual.Name {
 		t.Errorf("Attribute name mismatch: expected %s, got %s", expected.Name, actual.Name)
+	}
+
+	// Check if the block comment matches
+	if expected.BlockComment != actual.BlockComment {
+		t.Errorf("Block comment mismatch for attribute %s: expected %q, got %q",
+			expected.Name, expected.BlockComment, actual.BlockComment)
+	}
+
+	// Check if the inline comment matches
+	if expected.InlineComment != actual.InlineComment {
+		t.Errorf("Inline comment mismatch for attribute %s: expected %q, got %q",
+			expected.Name, expected.InlineComment, actual.InlineComment)
 	}
 
 	// Compare the attribute values
@@ -305,6 +326,15 @@ func compareExpressions(t *testing.T, expected, actual types.Expression) {
 			if i >= len(act.Items) {
 				t.Errorf("Missing object item at index %d in actual", i)
 				continue
+			}
+			// Compare comments for object items
+			if expItem.BlockComment != act.Items[i].BlockComment {
+				t.Errorf("Object item block comment mismatch at index %d: expected %q, got %q",
+					i, expItem.BlockComment, act.Items[i].BlockComment)
+			}
+			if expItem.InlineComment != act.Items[i].InlineComment {
+				t.Errorf("Object item inline comment mismatch at index %d: expected %q, got %q",
+					i, expItem.InlineComment, act.Items[i].InlineComment)
 			}
 			compareExpressions(t, expItem.Key, act.Items[i].Key)
 			compareExpressions(t, expItem.Value, act.Items[i].Value)

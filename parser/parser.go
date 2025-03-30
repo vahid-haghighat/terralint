@@ -8,11 +8,15 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/vahid-haghighat/terralint/parser/types"
 	"github.com/zclconf/go-cty/cty"
+)
+
+// Block types
+const (
+	BlockTypeDynamic = "dynamic"
 )
 
 // ParseTerraformFile reads a Terraform file and parses it into an AST
@@ -23,11 +27,8 @@ func ParseTerraformFile(filePath string) (*types.Root, error) {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Create a new HCL parser
-	parser := hclparse.NewParser()
-
-	// Parse the file
-	file, diags := parser.ParseHCL(content, filePath)
+	// Parse the file using HCL's native parser with comments enabled
+	file, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("failed to parse HCL: %s", diags.Error())
 	}
@@ -57,36 +58,132 @@ func ParseTerraformFile(filePath string) (*types.Root, error) {
 
 	// Sort items by their source position
 	sort.Slice(items, func(i, j int) bool {
-		return items[i].Range().Start.Byte < items[j].Range().Start.Byte
+		return items[i].Range().Start.Line < items[j].Range().Start.Line ||
+			(items[i].Range().Start.Line == items[j].Range().Start.Line &&
+				items[i].Range().Start.Column < items[j].Range().Start.Column)
 	})
 
+	// If there are no items but there are comments at the start of the file,
+	// create an empty block with those comments
+	if len(items) == 0 {
+		tokens, diags := hclsyntax.LexConfig(content, filePath, hcl.InitialPos)
+		if !diags.HasErrors() {
+			var comments []string
+			for _, token := range tokens {
+				if token.Type == hclsyntax.TokenComment {
+					comment := string(token.Bytes)
+					if len(comment) > 0 {
+						comments = append(comments, comment)
+					}
+				}
+			}
+			if len(comments) > 0 {
+				var strippedComments []string
+				for _, comment := range comments {
+					strippedComments = append(strippedComments, stripCommentPrefix(comment))
+				}
+				root.Children = append(root.Children, &types.Block{
+					BlockComment: strings.Join(strippedComments, "\n"),
+				})
+			}
+		}
+		return root, nil
+	}
+
 	// Process items in order
-	for _, item := range items {
+	var lastEndLine int
+	for i, item := range items {
+		// For the first item, we want to include all comments from the start of the file
+		var startLine int
+		if i == 0 {
+			startLine = 1
+		} else {
+			startLine = lastEndLine + 1
+		}
+
 		switch item := item.(type) {
 		case *hclsyntax.Attribute:
-			attribute, err := convertAttribute(item.Name, item)
+			attribute, err := convertAttribute(item.Name, item, content, startLine, item.Range().Start.Line)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert attribute %s: %w", item.Name, err)
 			}
 			root.Children = append(root.Children, attribute)
+			lastEndLine = item.Range().End.Line
 		case *hclsyntax.Block:
-			block, err := convertBlock(item)
+			block, err := convertBlock(item, content, startLine, item.Range().Start.Line)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert block: %w", err)
 			}
 			root.Children = append(root.Children, block)
+			lastEndLine = item.Range().End.Line
 		}
 	}
 
 	return root, nil
 }
 
-func convertBlock(block *hclsyntax.Block) (*types.Block, error) {
-	b := &types.Block{
-		Type:     block.Type,
-		Labels:   block.Labels,
-		Range:    block.Range(),
-		Children: make([]types.Body, 0),
+func isWhitespace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
+}
+
+func stripCommentPrefix(comment string) string {
+	// Remove trailing newlines first
+	comment = strings.TrimRight(comment, "\n")
+
+	// Strip comment prefix
+	if strings.HasPrefix(comment, "//") {
+		return strings.TrimSpace(comment[2:])
+	} else if strings.HasPrefix(comment, "#") {
+		return strings.TrimSpace(comment[1:])
+	}
+	return strings.TrimSpace(comment)
+}
+
+func convertBlock(block *hclsyntax.Block, content []byte, startLine, endLine int) (*types.Block, error) {
+	// Extract comments for the block
+	var blockComment string
+	if startLine < endLine {
+		tokens, diags := hclsyntax.LexConfig(content, block.TypeRange.Filename, hcl.InitialPos)
+		if !diags.HasErrors() {
+			var comments []string
+			for _, token := range tokens {
+				if token.Type == hclsyntax.TokenComment {
+					if token.Range.Start.Line >= startLine && token.Range.Start.Line < endLine {
+						comment := string(token.Bytes)
+						if len(comment) > 0 {
+							comments = append(comments, comment)
+						}
+					}
+				}
+			}
+			if len(comments) > 0 {
+				var strippedComments []string
+				for _, comment := range comments {
+					strippedComments = append(strippedComments, stripCommentPrefix(comment))
+				}
+				blockComment = strings.Join(strippedComments, "\n")
+			}
+		}
+	}
+
+	result := &types.Block{
+		Type:         block.Type,
+		Labels:       block.Labels,
+		Range:        block.Range(),
+		Children:     make([]types.Body, 0),
+		BlockComment: blockComment,
+	}
+
+	// Process inline comment
+	tokens, diags := hclsyntax.LexConfig(content, block.TypeRange.Filename, hcl.InitialPos)
+	if !diags.HasErrors() {
+		for _, token := range tokens {
+			if token.Type == hclsyntax.TokenComment &&
+				token.Range.Start.Line == block.TypeRange.Start.Line {
+				result.InlineComment = stripCommentPrefix(string(token.Bytes))
+				break
+			}
+		}
 	}
 
 	// Process attributes and blocks in order by their source position
@@ -100,47 +197,94 @@ func convertBlock(block *hclsyntax.Block) (*types.Block, error) {
 			EqualsRange: attr.EqualsRange,
 		})
 	}
-	for _, block := range block.Body.Blocks {
-		items = append(items, block)
+	for _, nestedBlock := range block.Body.Blocks {
+		items = append(items, nestedBlock)
 	}
 
 	// Sort items by their source position
 	sort.Slice(items, func(i, j int) bool {
-		return items[i].Range().Start.Byte < items[j].Range().Start.Byte
+		return items[i].Range().Start.Line < items[j].Range().Start.Line ||
+			(items[i].Range().Start.Line == items[j].Range().Start.Line &&
+				items[i].Range().Start.Column < items[j].Range().Start.Column)
 	})
 
 	// Process items in order
+	var lastChildEndLine int = block.Body.Range().Start.Line
 	for _, item := range items {
+		var itemStartLine int = lastChildEndLine + 1
+
 		switch item := item.(type) {
 		case *hclsyntax.Attribute:
-			attribute, err := convertAttribute(item.Name, item)
+			attribute, err := convertAttribute(item.Name, item, content, itemStartLine, item.Range().Start.Line)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert attribute %s: %w", item.Name, err)
 			}
-			b.Children = append(b.Children, attribute)
+			result.Children = append(result.Children, attribute)
+			lastChildEndLine = item.Range().End.Line
 		case *hclsyntax.Block:
-			nested, err := convertBlock(item)
+			nested, err := convertBlock(item, content, itemStartLine, item.Range().Start.Line)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert nested block: %w", err)
 			}
-			b.Children = append(b.Children, nested)
+			result.Children = append(result.Children, nested)
+			lastChildEndLine = item.Range().End.Line
 		}
 	}
 
-	return b, nil
+	return result, nil
 }
 
-func convertAttribute(name string, attr *hclsyntax.Attribute) (*types.Attribute, error) {
+func convertAttribute(name string, attr *hclsyntax.Attribute, content []byte, startLine int, endLine int) (*types.Attribute, error) {
 	expr, err := convertExpression(attr.Expr)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.Attribute{
+	a := &types.Attribute{
 		Name:  name,
 		Value: expr,
 		Range: attr.Range(),
-	}, nil
+	}
+
+	// Extract comments using HCL's token functionality
+	tokens, diags := hclsyntax.LexConfig(content, attr.NameRange.Filename, hcl.InitialPos)
+	if !diags.HasErrors() {
+		// Process all comments before the attribute
+		var comments []string
+		for _, token := range tokens {
+			if token.Type == hclsyntax.TokenComment {
+				if token.Range.Start.Line >= startLine && token.Range.Start.Line < endLine {
+					comment := string(token.Bytes)
+					if len(comment) > 0 {
+						comments = append(comments, comment)
+					}
+				}
+			}
+		}
+
+		// Set the block comment if we found any
+		if len(comments) > 0 {
+			var strippedComments []string
+			for _, comment := range comments {
+				strippedComments = append(strippedComments, stripCommentPrefix(comment))
+			}
+			a.BlockComment = strings.Join(strippedComments, "\n")
+		}
+	}
+
+	// Process inline comment
+	tokens, diags = hclsyntax.LexConfig(content, attr.NameRange.Filename, hcl.InitialPos)
+	if !diags.HasErrors() {
+		for _, token := range tokens {
+			if token.Type == hclsyntax.TokenComment &&
+				token.Range.Start.Line == attr.NameRange.Start.Line {
+				a.InlineComment = stripCommentPrefix(string(token.Bytes))
+				break
+			}
+		}
+	}
+
+	return a, nil
 }
 
 func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
@@ -332,9 +476,95 @@ func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			// Extract comments for the object item
+			var blockComment string
+			if i > 0 {
+				prevItem := e.Items[i-1]
+				// Use the end of the previous value and start of the current key
+				if item.KeyExpr.Range().Start.Line > prevItem.ValueExpr.Range().End.Line+1 {
+					// Look for comments between the previous item and this one
+					content := item.KeyExpr.Range().SliceBytes(nil)
+					tokens, diags := hclsyntax.LexConfig(content, item.KeyExpr.Range().Filename, hcl.InitialPos)
+					if !diags.HasErrors() {
+						var comments []string
+						for _, token := range tokens {
+							if token.Type == hclsyntax.TokenComment {
+								if token.Range.Start.Line > prevItem.ValueExpr.Range().End.Line &&
+									token.Range.Start.Line < item.KeyExpr.Range().Start.Line {
+									comment := string(token.Bytes)
+									if len(comment) > 0 {
+										comments = append(comments, comment)
+									}
+								}
+							}
+						}
+						if len(comments) > 0 {
+							var strippedComments []string
+							for _, comment := range comments {
+								strippedComments = append(strippedComments, stripCommentPrefix(comment))
+							}
+							blockComment = strings.Join(strippedComments, "\n")
+						}
+					}
+				}
+			} else if item.KeyExpr.Range().Start.Line > e.SrcRange.Start.Line+1 {
+				// Look for comments before the first item
+				content := item.KeyExpr.Range().SliceBytes(nil)
+				tokens, diags := hclsyntax.LexConfig(content, item.KeyExpr.Range().Filename, hcl.InitialPos)
+				if !diags.HasErrors() {
+					var comments []string
+					for _, token := range tokens {
+						if token.Type == hclsyntax.TokenComment {
+							if token.Range.Start.Line > e.SrcRange.Start.Line &&
+								token.Range.Start.Line < item.KeyExpr.Range().Start.Line {
+								comment := string(token.Bytes)
+								if len(comment) > 0 {
+									comments = append(comments, comment)
+								}
+							}
+						}
+					}
+					if len(comments) > 0 {
+						var strippedComments []string
+						for _, comment := range comments {
+							strippedComments = append(strippedComments, stripCommentPrefix(comment))
+						}
+						blockComment = strings.Join(strippedComments, "\n")
+					}
+				}
+			}
+
+			// Check for comments before the value expression
+			if blockComment == "" {
+				content := item.ValueExpr.Range().SliceBytes(nil)
+				tokens, diags := hclsyntax.LexConfig(content, item.ValueExpr.Range().Filename, hcl.InitialPos)
+				if !diags.HasErrors() {
+					var comments []string
+					for _, token := range tokens {
+						if token.Type == hclsyntax.TokenComment {
+							if token.Range.Start.Line < item.ValueExpr.Range().Start.Line {
+								comment := string(token.Bytes)
+								if len(comment) > 0 {
+									comments = append(comments, comment)
+								}
+							}
+						}
+					}
+					if len(comments) > 0 {
+						var strippedComments []string
+						for _, comment := range comments {
+							strippedComments = append(strippedComments, stripCommentPrefix(comment))
+						}
+						blockComment = strings.Join(strippedComments, "\n")
+					}
+				}
+			}
+
 			items[i] = types.ObjectItem{
-				Key:   key,
-				Value: value,
+				Key:          key,
+				Value:        value,
+				BlockComment: blockComment,
 			}
 		}
 		return &types.ObjectExpr{

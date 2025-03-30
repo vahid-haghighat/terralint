@@ -52,11 +52,12 @@ func createSimpleTerraformExpected() types.Body {
 						},
 					},
 				},
+				BlockComment: "Simple Terraform file for testing the parser\nResource block",
 			},
 			&types.Block{
 				Type:         "variable",
 				Labels:       []string{"region"},
-				BlockComment: "// Variable block",
+				BlockComment: "Variable block",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "description",
@@ -83,7 +84,7 @@ func createSimpleTerraformExpected() types.Body {
 			&types.Block{
 				Type:         "output",
 				Labels:       []string{"instance_id"},
-				BlockComment: "// Output block",
+				BlockComment: "Output block",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "description",
@@ -103,7 +104,7 @@ func createSimpleTerraformExpected() types.Body {
 			&types.Block{
 				Type:         "data",
 				Labels:       []string{"aws_ami", "ubuntu"},
-				BlockComment: "// Data source block",
+				BlockComment: "Data source block",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "most_recent",
@@ -168,13 +169,14 @@ func createSimpleTerraformExpected() types.Body {
 								},
 							},
 						},
+						InlineComment: "Canonical",
 					},
 				},
 			},
 			&types.Block{
 				Type:         "provider",
 				Labels:       []string{"aws"},
-				BlockComment: "// Provider block",
+				BlockComment: "Provider block",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "region",
@@ -186,7 +188,7 @@ func createSimpleTerraformExpected() types.Body {
 			},
 			&types.Block{
 				Type:         "locals",
-				BlockComment: "// Locals block",
+				BlockComment: "Locals block",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "common_tags",
@@ -227,7 +229,7 @@ func createSimpleTerraformExpected() types.Body {
 			&types.Block{
 				Type:         "module",
 				Labels:       []string{"vpc"},
-				BlockComment: "// Module block",
+				BlockComment: "Module block",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "source",

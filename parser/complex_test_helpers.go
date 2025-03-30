@@ -11,7 +11,7 @@ func createComplexModuleExpected() types.Body {
 			&types.Block{
 				Type:         "module",
 				Labels:       []string{"complex_module"},
-				BlockComment: "// Complex module with nested expressions, conditionals, and for loops",
+				BlockComment: "Complex module with nested expressions, conditionals, and for loops",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "source",
@@ -29,7 +29,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "vpc_config",
-						BlockComment: "// Complex map with nested objects, expressions, and functions",
+						BlockComment: "Complex map with nested objects, expressions, and functions",
 						Value: &types.ObjectExpr{
 							Items: []types.ObjectItem{
 								{
@@ -57,7 +57,7 @@ func createComplexModuleExpected() types.Body {
 								},
 								{
 									Key:          &types.ReferenceExpr{Parts: []string{"enable_dns"}},
-									BlockComment: "// Nested conditional expression",
+									BlockComment: "Nested conditional expression",
 									Value: &types.ConditionalExpr{
 										Condition: &types.BinaryExpr{
 											Left:     &types.ReferenceExpr{Parts: []string{"var", "environment"}},
@@ -79,7 +79,8 @@ func createComplexModuleExpected() types.Body {
 									},
 								},
 								{
-									Key: &types.ReferenceExpr{Parts: []string{"tags"}},
+									Key:          &types.ReferenceExpr{Parts: []string{"tags"}},
+									BlockComment: "Complex object with nested expressions",
 									Value: &types.FunctionCallExpr{
 										Name: "merge",
 										Args: []types.Expression{
@@ -159,14 +160,13 @@ func createComplexModuleExpected() types.Body {
 											},
 										},
 									},
-									BlockComment: "// Complex object with nested expressions",
 								},
 							},
 						},
 					},
 					&types.Attribute{
 						Name:         "subnet_cidrs",
-						BlockComment: "// Complex for expression with filtering and transformation",
+						BlockComment: "Complex for expression with filtering and transformation",
 						Value: &types.ForArrayExpr{
 							KeyVar:     "i",
 							ValueVar:   "subnet",
@@ -192,7 +192,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "subnet_configs",
-						BlockComment: "// Nested for expressions with conditional",
+						BlockComment: "Nested for expressions with conditional",
 						Value: &types.ForMapExpr{
 							KeyVar:      "zone_key",
 							ValueVar:    "zone",
@@ -289,7 +289,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "all_subnet_ids",
-						BlockComment: "// Complex splat expression",
+						BlockComment: "Complex splat expression",
 						Value: &types.FunctionCallExpr{
 							Name: "flatten",
 							Args: []types.Expression{
@@ -309,7 +309,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "user_data",
-						BlockComment: "// Heredoc with interpolation",
+						BlockComment: "Heredoc with interpolation",
 						Value: &types.HeredocExpr{
 							Marker:   "EOT",
 							Indented: true,
@@ -318,7 +318,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "timeout",
-						BlockComment: "// Complex binary expressions with nested conditionals",
+						BlockComment: "Complex binary expressions with nested conditionals",
 						Value: &types.BinaryExpr{
 							Left: &types.ParenExpr{
 								Expression: &types.ConditionalExpr{
@@ -363,7 +363,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "complex_calculation",
-						BlockComment: "// Nested parentheses and operators",
+						BlockComment: "Nested parentheses and operators",
 						Value: &types.BinaryExpr{
 							Left: &types.ParenExpr{
 								Expression: &types.BinaryExpr{
@@ -434,7 +434,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "security_groups",
-						BlockComment: "// Complex function calls with nested expressions",
+						BlockComment: "Complex function calls with nested expressions",
 						Value: &types.FunctionCallExpr{
 							Name: "compact",
 							Args: []types.Expression{
@@ -475,7 +475,7 @@ func createComplexModuleExpected() types.Body {
 					},
 					&types.Attribute{
 						Name:         "custom_template",
-						BlockComment: "// Template with directives",
+						BlockComment: "Template with directives",
 						Value: &types.FunctionCallExpr{
 							Name: "templatefile",
 							Args: []types.Expression{
@@ -664,10 +664,11 @@ func createComplexModuleExpected() types.Body {
 								},
 							},
 						},
+						BlockComment: "Dynamic blocks with complex expressions",
 					},
 					&types.Attribute{
 						Name:         "validation",
-						BlockComment: "// Complex type constraints",
+						BlockComment: "Complex type constraints",
 						Value: &types.ObjectExpr{
 							Items: []types.ObjectItem{
 								{
@@ -705,7 +706,7 @@ func createComplexResourceExpected() types.Body {
 			&types.Block{
 				Type:         "resource",
 				Labels:       []string{"aws_security_group", "complex"},
-				BlockComment: "// Resource with complex dynamic blocks and for_each",
+				BlockComment: "Resource with complex dynamic blocks and for_each",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "for_each",
@@ -813,6 +814,7 @@ func createComplexResourceExpected() types.Body {
 								},
 							},
 						},
+						BlockComment: "Dynamic blocks with nested expressions",
 					},
 					&types.Block{
 						Type:   "dynamic",
@@ -894,7 +896,8 @@ func createComplexResourceExpected() types.Body {
 						},
 					},
 					&types.Attribute{
-						Name: "tags",
+						Name:         "tags",
+						BlockComment: "Complex tags with expressions and functions",
 						Value: &types.FunctionCallExpr{
 							Name: "merge",
 							Args: []types.Expression{
@@ -954,7 +957,6 @@ func createComplexResourceExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Complex tags with expressions and functions",
 					},
 					&types.Block{
 						Type: "lifecycle",
@@ -1008,7 +1010,7 @@ func createComplexLocalsExpected() types.Body {
 		Children: []types.Body{
 			&types.Block{
 				Type:         "locals",
-				BlockComment: "// Complex locals with nested expressions",
+				BlockComment: "Complex locals with nested expressions",
 				Children: []types.Body{
 					&types.Attribute{
 						Name: "subnet_map",
@@ -1058,7 +1060,7 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Complex map transformation",
+						BlockComment: "Complex map transformation",
 					},
 					&types.Attribute{
 						Name: "filtered_instances",
@@ -1130,7 +1132,7 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Nested for expressions with filtering",
+						BlockComment: "Nested for expressions with filtering",
 					},
 					&types.Attribute{
 						Name: "backup_config",
@@ -1264,7 +1266,7 @@ func createComplexLocalsExpected() types.Body {
 							},
 							FalseExpr: &types.LiteralValue{Value: nil, ValueType: "null"},
 						},
-						BlockComment: "// Complex conditional with multiple nested expressions",
+						BlockComment: "Complex conditional with multiple nested expressions",
 					},
 					&types.Attribute{
 						Name: "naming_convention",
@@ -1296,7 +1298,7 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Complex string interpolation with functions",
+						BlockComment: "Complex string interpolation with functions",
 					},
 					&types.Attribute{
 						Name: "timeout_seconds",
@@ -1335,7 +1337,7 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Nested ternary operators",
+						BlockComment: "Nested ternary operators",
 					},
 					&types.Attribute{
 						Name: "schema",
@@ -1493,7 +1495,7 @@ func createComplexLocalsExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Complex type expressions",
+						BlockComment: "Complex type expressions",
 					},
 				},
 			},
@@ -1508,7 +1510,7 @@ func createComplexDataSourceExpected() types.Body {
 			&types.Block{
 				Type:         "data",
 				Labels:       []string{"aws_iam_policy_document", "complex"},
-				BlockComment: "// Data source with complex expressions",
+				BlockComment: "Data source with complex expressions",
 				Children: []types.Body{
 					&types.Block{
 						Type:   "dynamic",
@@ -1644,7 +1646,7 @@ func createComplexDataSourceExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Dynamic statement blocks",
+						BlockComment: "Dynamic statement blocks",
 					},
 					&types.Block{
 						Type: "statement",
@@ -1753,7 +1755,7 @@ func createComplexDataSourceExpected() types.Body {
 								},
 							},
 						},
-						BlockComment: "// Override with inline statement",
+						BlockComment: "Override with inline statement",
 					},
 				},
 			},
@@ -1767,8 +1769,8 @@ func createComplexVariableExpected() types.Body {
 		Children: []types.Body{
 			&types.Block{
 				Type:         "variable",
-				Labels:       []string{"complex_object"},
-				BlockComment: "// Variable with complex type constraints and validations",
+				Labels:       []string{"complex_var"},
+				BlockComment: "Variable with complex type constraints and validations",
 				Children: []types.Body{
 					&types.Attribute{
 						Name:  "description",
@@ -2173,13 +2175,13 @@ func createComplexVariableExpected() types.Body {
 								Name: "condition",
 								Value: &types.BinaryExpr{
 									Left: &types.BinaryExpr{
-										Left:     &types.ReferenceExpr{Parts: []string{"var", "complex_object", "count"}},
+										Left:     &types.ReferenceExpr{Parts: []string{"var", "complex_var", "count"}},
 										Operator: ">",
 										Right:    &types.LiteralValue{Value: 0, ValueType: "number"},
 									},
 									Operator: "&&",
 									Right: &types.BinaryExpr{
-										Left:     &types.ReferenceExpr{Parts: []string{"var", "complex_object", "count"}},
+										Left:     &types.ReferenceExpr{Parts: []string{"var", "complex_var", "count"}},
 										Operator: "<=",
 										Right:    &types.LiteralValue{Value: 10, ValueType: "number"},
 									},
@@ -2203,7 +2205,7 @@ func createComplexVariableExpected() types.Body {
 											Name: "regex",
 											Args: []types.Expression{
 												&types.LiteralValue{Value: "^(dev|staging|prod)$", ValueType: "string"},
-												&types.ReferenceExpr{Parts: []string{"var", "complex_object", "environment"}},
+												&types.ReferenceExpr{Parts: []string{"var", "complex_var", "environment"}},
 											},
 										},
 									},
@@ -2224,7 +2226,7 @@ func createComplexVariableExpected() types.Body {
 									Left: &types.FunctionCallExpr{
 										Name: "length",
 										Args: []types.Expression{
-											&types.ReferenceExpr{Parts: []string{"var", "complex_object", "vpc", "private_subnets"}},
+											&types.ReferenceExpr{Parts: []string{"var", "complex_var", "vpc", "private_subnets"}},
 										},
 									},
 									Operator: ">",
@@ -2247,7 +2249,7 @@ func createComplexVariableExpected() types.Body {
 									Args: []types.Expression{
 										&types.ForArrayExpr{
 											KeyVar:     "instance",
-											Collection: &types.ReferenceExpr{Parts: []string{"var", "complex_object", "instances"}},
+											Collection: &types.ReferenceExpr{Parts: []string{"var", "complex_var", "instances"}},
 											ThenValueExpr: &types.BinaryExpr{
 												Left: &types.BinaryExpr{
 													Left:     &types.ReferenceExpr{Parts: []string{"instance", "root_volume", "size"}},
@@ -2284,7 +2286,7 @@ func createComplexOutputExpected() types.Body {
 			&types.Block{
 				Type:         "output",
 				Labels:       []string{"complex_output"},
-				BlockComment: "// Output with complex expressions",
+				BlockComment: "Output with complex expressions",
 				Children: []types.Body{
 					&types.Attribute{
 						Name:  "description",
@@ -2419,7 +2421,7 @@ func createComplexProviderExpected() types.Body {
 			&types.Block{
 				Type:         "provider",
 				Labels:       []string{"aws"},
-				BlockComment: "// Provider configuration with complex expressions",
+				BlockComment: "Provider configuration with complex expressions",
 				Children: []types.Body{
 					&types.Attribute{
 						Name:  "region",
@@ -2616,7 +2618,7 @@ func createComplexTerraformConfigExpected() types.Body {
 		Children: []types.Body{
 			&types.Block{
 				Type:         "terraform",
-				BlockComment: "// Terraform configuration with complex expressions",
+				BlockComment: "Terraform configuration with complex expressions",
 				Children: []types.Body{
 					&types.Attribute{
 						Name:  "required_version",

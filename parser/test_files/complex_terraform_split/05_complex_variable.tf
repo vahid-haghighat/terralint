@@ -1,5 +1,5 @@
 // Variable with complex type constraints and validations
-variable "complex_object" {
+variable "complex_var" {
   description = "A complex object with nested types and validations"
   type = object({
     name = string
@@ -65,23 +65,23 @@ variable "complex_object" {
   })
 
   validation {
-    condition     = var.complex_object.count > 0 && var.complex_object.count <= 10
+    condition     = var.complex_var.count > 0 && var.complex_var.count <= 10
     error_message = "Count must be between 1 and 10."
   }
 
   validation {
-    condition     = can(regex("^(dev|staging|prod)$", var.complex_object.environment))
+    condition     = can(regex("^(dev|staging|prod)$", var.complex_var.environment))
     error_message = "Environment must be one of: dev, staging, prod."
   }
 
   validation {
-    condition     = length(var.complex_object.vpc.private_subnets) > 0
+    condition     = length(var.complex_var.vpc.private_subnets) > 0
     error_message = "At least one private subnet must be defined."
   }
 
   validation {
     condition     = alltrue([
-      for instance in var.complex_object.instances :
+      for instance in var.complex_var.instances :
       instance.root_volume.size >= 20 && instance.root_volume.encrypted == true
     ])
     error_message = "All root volumes must be at least 20GB and encrypted."
