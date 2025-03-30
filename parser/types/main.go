@@ -1,6 +1,6 @@
 package types
 
-import sitter "github.com/smacker/go-tree-sitter"
+import "github.com/hashicorp/hcl/v2"
 
 // Body is the base interface that all Terraform elements must implement
 type Body interface {
@@ -20,7 +20,7 @@ func (r *Root) BodyType() string {
 type FormatDirective struct {
 	DirectiveType string   // The directive type (e.g., "tflint-ignore")
 	Parameters    []string // Any parameters for the directive
-	Range         sitter.Range
+	Range         hcl.Range
 }
 
 func (f *FormatDirective) BodyType() string {
@@ -29,12 +29,12 @@ func (f *FormatDirective) BodyType() string {
 
 // Block represents a Terraform block (resource, data, module, etc.)
 type Block struct {
-	Type          string       // The type of block (resource, data, variable, etc.)
-	Labels        []string     // Labels/identifiers for the block (e.g., "aws_instance" "example")
-	Range         sitter.Range // Source code position information
-	InlineComment string       // Inline comment if present
-	BlockComment  string       // Block comment if present
-	Children      []Body       // Nested blocks and attributes
+	Type          string    // The type of block (resource, data, variable, etc.)
+	Labels        []string  // Labels/identifiers for the block (e.g., "aws_instance" "example")
+	Range         hcl.Range // Source code position information
+	InlineComment string    // Inline comment if present
+	BlockComment  string    // Block comment if present
+	Children      []Body    // Nested blocks and attributes
 }
 
 func (b *Block) BodyType() string {
@@ -45,7 +45,7 @@ func (b *Block) BodyType() string {
 type Attribute struct {
 	Name          string     // The name of the attribute
 	Value         Expression // The value of the attribute
-	Range         sitter.Range
+	Range         hcl.Range
 	InlineComment string
 	BlockComment  string
 }

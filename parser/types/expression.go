@@ -1,32 +1,35 @@
 package types
 
-import sitter "github.com/smacker/go-tree-sitter"
+import (
+	"github.com/hashicorp/hcl/v2"
+	"github.com/zclconf/go-cty/cty"
+)
 
 // Expression interface represents any valid Terraform expression
 type Expression interface {
 	ExpressionType() string
-	Range() sitter.Range
+	Range() hcl.Range
 }
 
 // LiteralValue represents primitive values (string, number, bool)
 type LiteralValue struct {
 	Value     interface{} // The actual value
 	ValueType string      // Type of the value (string, number, bool)
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (l *LiteralValue) ExpressionType() string {
 	return "literal"
 }
 
-func (l *LiteralValue) Range() sitter.Range {
+func (l *LiteralValue) Range() hcl.Range {
 	return l.ExprRange
 }
 
 // ObjectExpr represents object/map expressions
 type ObjectExpr struct {
 	Items     []ObjectItem
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 type ObjectItem struct {
@@ -34,14 +37,14 @@ type ObjectItem struct {
 	Value         Expression
 	InlineComment string
 	BlockComment  string // Added to capture block comments
-	ExprRange     sitter.Range
+	ExprRange     hcl.Range
 }
 
 func (o *ObjectItem) ExpressionType() string {
 	return "object_item"
 }
 
-func (o *ObjectItem) Range() sitter.Range {
+func (o *ObjectItem) Range() hcl.Range {
 	return o.ExprRange
 }
 
@@ -49,35 +52,35 @@ func (o *ObjectExpr) ExpressionType() string {
 	return "object"
 }
 
-func (o *ObjectExpr) Range() sitter.Range {
+func (o *ObjectExpr) Range() hcl.Range {
 	return o.ExprRange
 }
 
 // ArrayExpr represents array/list expressions
 type ArrayExpr struct {
 	Items     []Expression
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (a *ArrayExpr) ExpressionType() string {
 	return "array"
 }
 
-func (a *ArrayExpr) Range() sitter.Range {
+func (a *ArrayExpr) Range() hcl.Range {
 	return a.ExprRange
 }
 
 // ReferenceExpr represents variable references and attribute access
 type ReferenceExpr struct {
 	Parts     []string // e.g., ["var", "environment"] for var.environment
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (r *ReferenceExpr) ExpressionType() string {
 	return "reference"
 }
 
-func (r *ReferenceExpr) Range() sitter.Range {
+func (r *ReferenceExpr) Range() hcl.Range {
 	return r.ExprRange
 }
 
@@ -85,28 +88,28 @@ func (r *ReferenceExpr) Range() sitter.Range {
 type FunctionCallExpr struct {
 	Name      string
 	Args      []Expression
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (f *FunctionCallExpr) ExpressionType() string {
 	return "function_call"
 }
 
-func (f *FunctionCallExpr) Range() sitter.Range {
+func (f *FunctionCallExpr) Range() hcl.Range {
 	return f.ExprRange
 }
 
 // TemplateExpr represents string interpolation
 type TemplateExpr struct {
 	Parts     []Expression // Mix of LiteralValue, TemplateForDirective, TemplateIfDirective, and other expressions
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (t *TemplateExpr) ExpressionType() string {
 	return "template"
 }
 
-func (t *TemplateExpr) Range() sitter.Range {
+func (t *TemplateExpr) Range() hcl.Range {
 	return t.ExprRange
 }
 
@@ -115,14 +118,14 @@ type ConditionalExpr struct {
 	Condition Expression
 	TrueExpr  Expression
 	FalseExpr Expression
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (c *ConditionalExpr) ExpressionType() string {
 	return "conditional"
 }
 
-func (c *ConditionalExpr) Range() sitter.Range {
+func (c *ConditionalExpr) Range() hcl.Range {
 	return c.ExprRange
 }
 
@@ -131,14 +134,14 @@ type BinaryExpr struct {
 	Left      Expression
 	Operator  string // Should support: ==, !=, <, >, <=, >=, &&, ||, +, -, *, /, %, etc.
 	Right     Expression
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (b *BinaryExpr) ExpressionType() string {
 	return "binary"
 }
 
-func (b *BinaryExpr) Range() sitter.Range {
+func (b *BinaryExpr) Range() hcl.Range {
 	return b.ExprRange
 }
 
@@ -159,14 +162,14 @@ type ForMapExpr struct {
 	Condition Expression // Optional "if" condition (e.g., "x != null" in "for x in xs : x if x != null")
 
 	// Source location
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (f *ForMapExpr) ExpressionType() string {
 	return "for_map"
 }
 
-func (f *ForMapExpr) Range() sitter.Range {
+func (f *ForMapExpr) Range() hcl.Range {
 	return f.ExprRange
 }
 
@@ -186,14 +189,14 @@ type ForArrayExpr struct {
 	Condition Expression // Optional "if" condition (e.g., "x != null" in "for x in xs : x if x != null")
 
 	// Source location
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (f *ForArrayExpr) ExpressionType() string {
 	return "for_array"
 }
 
-func (f *ForArrayExpr) Range() sitter.Range {
+func (f *ForArrayExpr) Range() hcl.Range {
 	return f.ExprRange
 }
 
@@ -201,14 +204,14 @@ func (f *ForArrayExpr) Range() sitter.Range {
 type SplatExpr struct {
 	Source    Expression // Expression being splattered
 	Each      Expression // Expression to evaluate for each element
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (s *SplatExpr) ExpressionType() string {
 	return "splat"
 }
 
-func (s *SplatExpr) Range() sitter.Range {
+func (s *SplatExpr) Range() hcl.Range {
 	return s.ExprRange
 }
 
@@ -217,14 +220,14 @@ type HeredocExpr struct {
 	Marker    string // The heredoc marker (e.g., "EOT")
 	Content   string // The content of the heredoc
 	Indented  bool   // Whether it's an indented heredoc (<<-)
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (h *HeredocExpr) ExpressionType() string {
 	return "heredoc"
 }
 
-func (h *HeredocExpr) Range() sitter.Range {
+func (h *HeredocExpr) Range() hcl.Range {
 	return h.ExprRange
 }
 
@@ -232,65 +235,65 @@ func (h *HeredocExpr) Range() sitter.Range {
 type IndexExpr struct {
 	Collection Expression
 	Key        Expression
-	ExprRange  sitter.Range
+	ExprRange  hcl.Range
 }
 
 func (i *IndexExpr) ExpressionType() string {
 	return "index"
 }
 
-func (i *IndexExpr) Range() sitter.Range {
+func (i *IndexExpr) Range() hcl.Range {
 	return i.ExprRange
 }
 
 // TupleExpr represents tuple expressions
 type TupleExpr struct {
 	Expressions []Expression
-	ExprRange   sitter.Range
+	ExprRange   hcl.Range
 }
 
 func (t *TupleExpr) ExpressionType() string {
 	return "tuple"
 }
 
-func (t *TupleExpr) Range() sitter.Range {
+func (t *TupleExpr) Range() hcl.Range {
 	return t.ExprRange
 }
 
-// Add UnaryExpr for operations like ! and -
-type UnaryExpr struct {
-	Operator  string // !, -
-	Expr      Expression
-	ExprRange sitter.Range
-}
-
-func (u *UnaryExpr) ExpressionType() string {
-	return "unary"
-}
-
-func (u *UnaryExpr) Range() sitter.Range {
-	return u.ExprRange
-}
-
-// ParenExpr for grouped expressions (a + b) * c
+// ParenExpr represents parenthesized expressions
 type ParenExpr struct {
 	Expression Expression
-	ExprRange  sitter.Range
+	ExprRange  hcl.Range
 }
 
 func (p *ParenExpr) ExpressionType() string {
 	return "paren"
 }
 
-func (p *ParenExpr) Range() sitter.Range {
+func (p *ParenExpr) Range() hcl.Range {
 	return p.ExprRange
+}
+
+// UnaryExpr represents unary operations
+type UnaryExpr struct {
+	Operator  string
+	Expr      Expression
+	ExprRange hcl.Range
+}
+
+func (u *UnaryExpr) ExpressionType() string {
+	return "unary"
+}
+
+func (u *UnaryExpr) Range() hcl.Range {
+	return u.ExprRange
 }
 
 // RelativeTraversalExpr for attribute access like aws_instance.example.id
 type RelativeTraversalExpr struct {
 	Source    Expression
 	Traversal []TraversalElem
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 type TraversalElem struct {
@@ -303,7 +306,7 @@ func (r *RelativeTraversalExpr) ExpressionType() string {
 	return "relative_traversal"
 }
 
-func (r *RelativeTraversalExpr) Range() sitter.Range {
+func (r *RelativeTraversalExpr) Range() hcl.Range {
 	return r.ExprRange
 }
 
@@ -313,14 +316,14 @@ type TemplateForDirective struct {
 	ValueVar  string       // Value variable
 	CollExpr  Expression   // Collection to iterate over
 	Content   []Expression // Content to repeat for each iteration
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (t *TemplateForDirective) ExpressionType() string {
 	return "template_for"
 }
 
-func (t *TemplateForDirective) Range() sitter.Range {
+func (t *TemplateForDirective) Range() hcl.Range {
 	return t.ExprRange
 }
 
@@ -329,28 +332,13 @@ type TemplateIfDirective struct {
 	Condition Expression
 	TrueExpr  []Expression
 	FalseExpr []Expression
-	ExprRange sitter.Range
+	ExprRange hcl.Range
 }
 
 func (t *TemplateIfDirective) ExpressionType() string {
 	return "template_if"
 }
 
-func (t *TemplateIfDirective) Range() sitter.Range {
-	return t.ExprRange
-}
-
-// TypeExpr represents type constraints like list(string)
-type TypeExpr struct {
-	TypeName   string       // Base type name (e.g., "list", "map")
-	Parameters []Expression // Type parameters if any
-	ExprRange  sitter.Range
-}
-
-func (t *TypeExpr) ExpressionType() string {
-	return "type"
-}
-
-func (t *TypeExpr) Range() sitter.Range {
+func (t *TemplateIfDirective) Range() hcl.Range {
 	return t.ExprRange
 }
