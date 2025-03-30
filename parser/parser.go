@@ -467,6 +467,19 @@ func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
 		}, nil
 	case *hclsyntax.ObjectConsExpr:
 		items := make([]types.ObjectItem, len(e.Items))
+
+		// Get the file content for lexing
+		content, err := os.ReadFile(e.SrcRange.Filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file for comment parsing: %w", err)
+		}
+
+		// Get all tokens once
+		tokens, diags := hclsyntax.LexConfig(content, e.SrcRange.Filename, hcl.InitialPos)
+		if diags.HasErrors() {
+			return nil, fmt.Errorf("failed to lex file: %s", diags.Error())
+		}
+
 		for i, item := range e.Items {
 			key, err := convertExpression(item.KeyExpr)
 			if err != nil {
@@ -479,86 +492,32 @@ func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
 
 			// Extract comments for the object item
 			var blockComment string
-			if i > 0 {
+			var comments []string
+			var startLine int
+			if i == 0 {
+				startLine = e.SrcRange.Start.Line
+			} else {
 				prevItem := e.Items[i-1]
-				// Use the end of the previous value and start of the current key
-				if item.KeyExpr.Range().Start.Line > prevItem.ValueExpr.Range().End.Line+1 {
-					// Look for comments between the previous item and this one
-					content := item.KeyExpr.Range().SliceBytes(nil)
-					tokens, diags := hclsyntax.LexConfig(content, item.KeyExpr.Range().Filename, hcl.InitialPos)
-					if !diags.HasErrors() {
-						var comments []string
-						for _, token := range tokens {
-							if token.Type == hclsyntax.TokenComment {
-								if token.Range.Start.Line > prevItem.ValueExpr.Range().End.Line &&
-									token.Range.Start.Line < item.KeyExpr.Range().Start.Line {
-									comment := string(token.Bytes)
-									if len(comment) > 0 {
-										comments = append(comments, comment)
-									}
-								}
-							}
+				startLine = prevItem.ValueExpr.Range().End.Line
+			}
+
+			for _, token := range tokens {
+				if token.Type == hclsyntax.TokenComment {
+					if token.Range.Start.Line > startLine &&
+						token.Range.Start.Line < item.KeyExpr.Range().Start.Line {
+						comment := string(token.Bytes)
+						if len(comment) > 0 {
+							comments = append(comments, comment)
 						}
-						if len(comments) > 0 {
-							var strippedComments []string
-							for _, comment := range comments {
-								strippedComments = append(strippedComments, stripCommentPrefix(comment))
-							}
-							blockComment = strings.Join(strippedComments, "\n")
-						}
-					}
-				}
-			} else if item.KeyExpr.Range().Start.Line > e.SrcRange.Start.Line+1 {
-				// Look for comments before the first item
-				content := item.KeyExpr.Range().SliceBytes(nil)
-				tokens, diags := hclsyntax.LexConfig(content, item.KeyExpr.Range().Filename, hcl.InitialPos)
-				if !diags.HasErrors() {
-					var comments []string
-					for _, token := range tokens {
-						if token.Type == hclsyntax.TokenComment {
-							if token.Range.Start.Line > e.SrcRange.Start.Line &&
-								token.Range.Start.Line < item.KeyExpr.Range().Start.Line {
-								comment := string(token.Bytes)
-								if len(comment) > 0 {
-									comments = append(comments, comment)
-								}
-							}
-						}
-					}
-					if len(comments) > 0 {
-						var strippedComments []string
-						for _, comment := range comments {
-							strippedComments = append(strippedComments, stripCommentPrefix(comment))
-						}
-						blockComment = strings.Join(strippedComments, "\n")
 					}
 				}
 			}
-
-			// Check for comments before the value expression
-			if blockComment == "" {
-				content := item.ValueExpr.Range().SliceBytes(nil)
-				tokens, diags := hclsyntax.LexConfig(content, item.ValueExpr.Range().Filename, hcl.InitialPos)
-				if !diags.HasErrors() {
-					var comments []string
-					for _, token := range tokens {
-						if token.Type == hclsyntax.TokenComment {
-							if token.Range.Start.Line < item.ValueExpr.Range().Start.Line {
-								comment := string(token.Bytes)
-								if len(comment) > 0 {
-									comments = append(comments, comment)
-								}
-							}
-						}
-					}
-					if len(comments) > 0 {
-						var strippedComments []string
-						for _, comment := range comments {
-							strippedComments = append(strippedComments, stripCommentPrefix(comment))
-						}
-						blockComment = strings.Join(strippedComments, "\n")
-					}
+			if len(comments) > 0 {
+				var strippedComments []string
+				for _, comment := range comments {
+					strippedComments = append(strippedComments, stripCommentPrefix(comment))
 				}
+				blockComment = strings.Join(strippedComments, "\n")
 			}
 
 			items[i] = types.ObjectItem{
