@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gerdou/terralint/parser/types"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/gerdou/terralint/parser/types"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -397,8 +397,8 @@ func convertExpression(expr hclsyntax.Expression) (types.Expression, error) {
 				switch t.Key.Type() {
 				case cty.Number:
 					bf := t.Key.AsBigFloat()
-					if i, acc := bf.Int64(); acc == big.Exact {
-						parts[i] = fmt.Sprintf("[%d]", i)
+					if intVal, acc := bf.Int64(); acc == big.Exact {
+						parts[i] = fmt.Sprintf("[%d]", intVal)
 					} else {
 						parts[i] = fmt.Sprintf("[%s]", bf.String())
 					}
@@ -894,8 +894,8 @@ func convertTraversal(traversal []hcl.Traverser) []string {
 			case t.Key.Type() == cty.Number:
 				bf := t.Key.AsBigFloat()
 				if bf.IsInt() {
-					i, _ := bf.Int64()
-					parts[i] = fmt.Sprintf("[%d]", i)
+					intVal, _ := bf.Int64()
+					parts[i] = fmt.Sprintf("[%d]", intVal)
 				} else {
 					f, _ := bf.Float64()
 					parts[i] = fmt.Sprintf("[%f]", f)
@@ -924,8 +924,8 @@ func convertTraversalParts(traversal hcl.Traversal) []string {
 			case t.Key.Type() == cty.Number:
 				bf := t.Key.AsBigFloat()
 				if bf.IsInt() {
-					i, _ := bf.Int64()
-					parts[i] = fmt.Sprintf("[%d]", i)
+					intVal, _ := bf.Int64()
+					parts[i] = fmt.Sprintf("[%d]", intVal)
 				} else {
 					f, _ := bf.Float64()
 					parts[i] = fmt.Sprintf("[%f]", f)

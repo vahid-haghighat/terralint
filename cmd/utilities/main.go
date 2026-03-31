@@ -91,17 +91,14 @@ func ArrayIntersection[T comparable](a, b []T) []T {
 }
 
 func ArrayUnion[T comparable](a, b []T) []T {
-	ma := make(map[T]bool, len(a))
-	mb := make(map[T]bool, len(b))
+	result := make(map[T]struct{}, len(a)+len(b))
 
-	result := make(map[T]bool)
-
-	for key, _ := range ma {
-		result[key] = true
+	for _, x := range a {
+		result[x] = struct{}{}
 	}
 
-	for key, _ := range mb {
-		result[key] = true
+	for _, x := range b {
+		result[x] = struct{}{}
 	}
 
 	return MapKeys(result)

@@ -36,11 +36,13 @@ func applyRulesToFile(filePath string) error {
 
 func applyRulesToDirectory(directoryPath string) error {
 	err := filepath.WalkDir(directoryPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if path == directoryPath {
 			return nil
 		}
-		stat, _ := os.Stat(path)
-		if stat.IsDir() {
+		if d.IsDir() {
 			return applyRulesToDirectory(path)
 		}
 		return applyRulesToFile(path)
